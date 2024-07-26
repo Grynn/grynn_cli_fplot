@@ -1,0 +1,6 @@
+Click
+dateparser
+platformdirs
+yfinance
+IPython
+matplotlib
