@@ -1,38 +1,39 @@
 import re
 import click
 import datetime
-import dateutil.parser 
-import dateparser
-from IPython.display import display
+from dateutil import parser, relativedelta
 import yfinance
 import matplotlib.pyplot as plt
 
-@click.command()
-@click.option("--since", type=str, default="2024-01-00")
+# TODO: If time > 1 year, display CAGR
+
+
+@click.command("plot")
+@click.option("--since", type=str, default=None)
 @click.option("--interval", type=str, default="1d")
 @click.argument("ticker", type=str, nargs=1, required=True)
 def generate_plot(ticker, since, interval="1mo"):
     """Generate a plot of the given ticker(s)"""
-    if (isinstance(since, str)):
-        if (since == "2024-01-00"):
-            since = datetime.datetime.now() - datetime.timedelta(days=180)
-        elif (since.upper() == "YTD"):
+    if (since is None):
+        since = datetime.datetime.now() - relativedelta.relativedelta(years=1)
+    elif (isinstance(since, str)):
+        if (since.upper() == "YTD"):
             since = datetime.datetime(datetime.datetime.now().year, 1, 1)
-        elif re.match(r"\d+ ?(m|mos|days|d|yrs|y)$", since):
+        elif re.match(r"(last)? \d+ ?(m|mos|days|d|yrs|y)$", since):
             num = int(re.match(r"\d+", since).group())
             unit = re.search(r"(m|mos|days|d|yrs|y)$", since).group()
             if unit in ["m", "mos"]:
-                since = datetime.datetime.now() - datetime.timedelta(days=30*num)
+                since = datetime.datetime.now() - relativedelta.relativedelta(months=num)
             elif unit in ["d", "days"]:
-                since = datetime.datetime.now() - datetime.timedelta(days=num)
+                since = datetime.datetime.now() - relativedelta.relativedelta(days=num)
             elif unit in ["y", "yrs"]:
-                since = datetime.datetime.now() - datetime.timedelta(days=365*num)
+                since = datetime.datetime.now() - relativedelta.relativedelta(years=num)
             else:
                 click.echo(f"Invalid unit: {unit}", err=True)
         else:
             try:
+                import dateparser
                 since = dateparser.parse(since)
-                # TODO try parsing with ollama
             except Exception as e:
                 click.echo("Invalid since date")
                 click.error(e)
@@ -43,7 +44,7 @@ def generate_plot(ticker, since, interval="1mo"):
         return
                 
     if not isinstance(since, datetime.datetime):
-        since = dateutil.parser.parse(since)
+        since = parser.parse(since)
 
     if isinstance(ticker, str):
         tickers = [*ticker.split(",")]
@@ -62,20 +63,30 @@ def generate_plot(ticker, since, interval="1mo"):
 
     click.echo(f"Generating plot for {','.join(tickers)} since {since.date()}. Interval: {interval}")
 
-    df = yfinance.download(tickers, start=since, interval=interval).Close
+    df = yfinance.download(tickers, start=since, interval=interval)["Adj Close"]
+    
+    #Normalize the price data (so we can compare them, all tickers start at $100)
     df = df.div(df.iloc[0]).mul(100)
-    df.plot(figsize=(16, 12))
-    plt.title(f"{",".join(tickers)}")
-    plt.xlabel(f"from {since.date()} to {datetime.datetime.now().date()} in {interval} intervals")
+    df_dd = df.div(df.cummax()).sub(1)
 
-    # add annotations to the end of each series (with percent change)
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), sharex=True)
+
+    # Plot the normalized price data
+    df.plot(ax=ax1)
+    ax1.set_title(f"{','.join(tickers)} Price")
+    ax1.set_ylabel("Normalized Price")
+
+    # Plot the drawdowns
+    df_dd.plot(ax=ax2)
+    ax2.set_title(f"{','.join(tickers)} Drawdowns")
+    ax2.set_ylabel("Drawdown")
+    ax2.set_xlabel(f"from {since.date()} to {datetime.datetime.now().date()} in {interval} intervals")
+
+    # Add annotations to the end of each series in the price plot
     for col in df.columns:
-        plt.annotate(f"{col}: {df[col].iloc[-1]-100:.2f}%", (df.index[-1], df[col].iloc[-1]))
+        ax1.annotate(f"{col}: {df[col].iloc[-1]-100:.2f}%", (df.index[-1], df[col].iloc[-1]))
 
+    plt.tight_layout()
     plt.show()
     return
     
-
-# Not needed if called via setup.py which creates a wrapper
-if __name__ == '__main__':
-    generate_plot()
