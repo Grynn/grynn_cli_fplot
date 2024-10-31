@@ -1,9 +1,9 @@
-.PHONY: install
+.PHONY: install clean
 
 install:
-	poetry install
+	pip install -e .
 
-.PHONY: clean
 clean:
-	rm -rf dist
+	rm -rf ./dist
 	rm -rf __pycache__
+	rm -rf ./venv

@@ -1,50 +1,62 @@
 import re
 import click
-import datetime
-from dateutil import parser, relativedelta
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from dateutil import parser
 import yfinance
 import matplotlib.pyplot as plt
+import mplcursors
 
 # TODO: If time > 1 year, display CAGR
 
+def parse_start_date(date_or_offset) -> datetime:
+    if date_or_offset is None:
+        return datetime.now() - relativedelta(years=1)
+    elif isinstance(date_or_offset, str):
+        if date_or_offset.upper() == "YTD":
+            return datetime(datetime.now().year, 1, 1)
+        elif re.match(r"^(?:last\s*)?(\d+)\s*(m|mos|mths|mo|months|days|d|yrs|y|weeks?|wks?|wk)\s*(?:ago)?$", date_or_offset):
+            match = re.match(r"^(?:last\s*)?(\d+)\s*(m|mos|mths|mo|months|days|d|yrs|y|weeks?|wks?|wk)\s*(?:ago)?$", date_or_offset)
+            num = int(match.group(1))
+            unit = match.group(2)
+            if unit in ["m", "mo", "mos", "mths", "months"]:
+                return datetime.now() - relativedelta(months=num)
+            elif unit in ["d", "days"]:
+                return datetime.now() - relativedelta(days=num)
+            elif unit in ["y", "yrs"]:
+                return datetime.now() - relativedelta(years=num)
+            elif unit in ["w", "wk", "wks", "week", "weeks"]:
+                return datetime.now() - relativedelta(weeks=num)
+            else:
+                raise ValueError(f"Invalid unit: {unit} in expression {date_or_offset}")
+        else:
+            try:
+                import dateparser
+                parsed_date = dateparser.parse(date_or_offset)
+                if parsed_date is None:
+                    raise ValueError(f"Invalid date '{date_or_offset}'")
+                return parsed_date
+            except Exception as e:
+                raise ValueError(f"Invalid date '{date_or_offset}'")
+    elif isinstance(date_or_offset, datetime):
+        return date_or_offset
+    else:
+        raise ValueError(f"Invalid date '{date_or_offset}'")
+
+def generate_plots(tickers, since, interval="1d"):
+    """Generate df with price plot, drawdown plot, and if needed rolling CAGR"""
+    pass
 
 @click.command("plot")
 @click.option("--since", type=str, default=None)
 @click.option("--interval", type=str, default="1d")
 @click.argument("ticker", type=str, nargs=1, required=True)
-def generate_plot(ticker, since, interval="1mo"):
+def display_plot(ticker, since, interval="1mo"):
     """Generate a plot of the given ticker(s)"""
     if (since is None):
-        since = datetime.datetime.now() - relativedelta.relativedelta(years=1)
-    elif (isinstance(since, str)):
-        if (since.upper() == "YTD"):
-            since = datetime.datetime(datetime.datetime.now().year, 1, 1)
-        elif re.match(r"(last)? \d+ ?(m|mos|days|d|yrs|y)$", since):
-            num = int(re.match(r"\d+", since).group())
-            unit = re.search(r"(m|mos|days|d|yrs|y)$", since).group()
-            if unit in ["m", "mos"]:
-                since = datetime.datetime.now() - relativedelta.relativedelta(months=num)
-            elif unit in ["d", "days"]:
-                since = datetime.datetime.now() - relativedelta.relativedelta(days=num)
-            elif unit in ["y", "yrs"]:
-                since = datetime.datetime.now() - relativedelta.relativedelta(years=num)
-            else:
-                click.echo(f"Invalid unit: {unit}", err=True)
-        else:
-            try:
-                import dateparser
-                since = dateparser.parse(since)
-            except Exception as e:
-                click.echo("Invalid since date")
-                click.error(e)
-                return
-    elif not isinstance(since, datetime.datetime):
-        # since is not a string, nor a datetime object
-        click.echo("Invalid since date")
-        return
-                
-    if not isinstance(since, datetime.datetime):
-        since = parser.parse(since)
+        since = datetime.now() - relativedelta(years=1)
+    else:
+        since = parse_start_date(since)
 
     if isinstance(ticker, str):
         tickers = [*ticker.split(",")]
@@ -67,26 +79,51 @@ def generate_plot(ticker, since, interval="1mo"):
     
     #Normalize the price data (so we can compare them, all tickers start at $100)
     df = df.div(df.iloc[0]).mul(100)
-    df_dd = df.div(df.cummax()).sub(1)
+    df_dd = df.div(df.cummax()).sub(1)    
 
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), sharex=True)
 
-    # Plot the normalized price data
-    df.plot(ax=ax1)
+    # Generate color mapping, assign 'SPY' to gray
+    tickers_in_df = df.columns.tolist()
+    color_map = plt.get_cmap('tab10')
+    color_iter = iter(color_map.colors)
+    colors = []
+
+    for t in tickers_in_df:
+        if t == 'SPY':
+            colors.append('darkgrey')
+        else:
+            colors.append(next(color_iter))
+
+    # Plot the normalized price data with specified colors
+    df.plot(ax=ax1, color=colors)
     ax1.set_title(f"{','.join(tickers)} Price")
     ax1.set_ylabel("Normalized Price")
 
-    # Plot the drawdowns
-    df_dd.plot(ax=ax2)
+    # Plot the drawdowns with the same colors
+    df_dd.plot(ax=ax2, color=colors)
     ax2.set_title(f"{','.join(tickers)} Drawdowns")
     ax2.set_ylabel("Drawdown")
-    ax2.set_xlabel(f"from {since.date()} to {datetime.datetime.now().date()} in {interval} intervals")
+    ax2.set_xlabel(f"from {since.date()} to {datetime.now().date()} in {interval} intervals")
 
-    # Add annotations to the end of each series in the price plot
-    for col in df.columns:
-        ax1.annotate(f"{col}: {df[col].iloc[-1]-100:.2f}%", (df.index[-1], df[col].iloc[-1]))
+    # Add annotations with text color matching line color
+    for line in ax1.get_lines():
+        y = line.get_ydata()[-1]
+        x = line.get_xdata()[-1]
+        label = line.get_label()
+        ax1.annotate(f"{label}: {y-100:.2f}%", xy=(x, y), color=line.get_color())
 
+    # Add interactive features
+    mplcursors.cursor(ax1).connect("add", lambda sel: (
+        sel.annotation.set_text(f"{sel.artist.get_label()}: {sel.target[1]:.2f}"),
+        sel.annotation.set_color(sel.artist.get_color())
+    ))
+    mplcursors.cursor(ax2).connect("add", lambda sel: (
+        sel.annotation.set_text(f"{sel.artist.get_label()}: {sel.target[1]:.2f}"),
+        sel.annotation.set_color(sel.artist.get_color())
+    ))
+    
     plt.tight_layout()
     plt.show()
     return
-    
+

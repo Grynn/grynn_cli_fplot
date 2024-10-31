@@ -1,9 +1,11 @@
-# Historical Quote
+# Display comparative stock price history
 
 ## Install
 
 For development, install the package in editable mode with
-`pip install -e .`
+`make install`
+
+Still in development, so not yet available on PyPI.
 
 ## Usage
 
@@ -12,4 +14,4 @@ fplot <ticker> [--since <date>] [--interval <interval>]
 ```
 
 Example:
-`historical_quote AAPL --since ytd`
+`fplot AAPL --since ytd`

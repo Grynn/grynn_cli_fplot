@@ -1,19 +1,20 @@
-[tool.poetry]
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
 name = 'grynn_cli_fplot'
 version = '0.2.1'
 description = 'cli tool for plotting financial data'
-authors = ['Grynn <vishal.doshi@gmail.com>']
-license = 'MIT'
+authors = [ { name="Grynn", email="vishal.doshi@gmail.com" }]
+requires-python = '>=3.9'
+dependencies = [
+    "click ~= 8.1.7",
+    "yfinance ~= 0.2.44",
+    "matplotlib ~= 3.9.2",
+    "dateparser ~= 1.2.0",
+    "mplcursors ~= 0.5.3"
+]
 
-[tool.poetry.dependencies]
-python = '^3.9'
-click = "^8.1.7"
-yfinance = "^0.2.44"
-matplotlib = "^3.9.2"
-dateparser = "^1.2.0"
-
-[tool.poetry.scripts]
-fplot = 'grynn_cli_fplot:generate_plot'
-
-[tool.poetry.group.dev.dependencies]
-poetry-plugin-export = "^1.8.0"
+[project.scripts]
+fplot = 'grynn_cli_fplot:display_plot'

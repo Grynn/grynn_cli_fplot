@@ -1,4 +1,4 @@
-from .fplot import generate_plot
+from .fplot import display_plot
 
 if __name__ == "__main__":
-    generate_plot()
+    display_plot()
