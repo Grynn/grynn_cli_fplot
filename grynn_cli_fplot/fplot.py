@@ -2,7 +2,6 @@ import re
 import click
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from dateutil import parser
 import yfinance
 import matplotlib.pyplot as plt
 import mplcursors
@@ -43,9 +42,26 @@ def parse_start_date(date_or_offset) -> datetime:
     else:
         raise ValueError(f"Invalid date '{date_or_offset}'")
 
-def generate_plots(tickers, since, interval="1d"):
-    """Generate df with price plot, drawdown plot, and if needed rolling CAGR"""
-    pass
+def gather_data(ticker, since, interval="1d"):
+    """Download data from Yahoo Finance"""
+    if isinstance(ticker, str):
+        tickers = [*ticker.split(",")]
+    
+    tickers = set(tickers)
+    if len(tickers) == 1: tickers.add("SPY")
+
+    ## correct common mistakes
+    ## acceptable intervals are 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+    ## if interval = 1w, map to 1wk
+    if interval == "1w": interval = "1wk"
+    if re.match(r"3m$", interval): interval = "3mo"
+    if interval == "day": interval = "1d"
+    if interval == "week": interval = "1wk"
+    if interval == "month": interval = "1mo"
+    df = yfinance.download(tickers, start=since, interval=interval)["Adj Close"]
+
+    return df
+
 
 @click.command("plot")
 @click.option("--since", type=str, default=None)
@@ -58,24 +74,10 @@ def display_plot(ticker, since, interval="1mo"):
     else:
         since = parse_start_date(since)
 
-    if isinstance(ticker, str):
-        tickers = [*ticker.split(",")]
+    df = gather_data(ticker, since, interval)
+    tickers = df.columns.tolist()
     
-    tickers = list(set(tickers))
-    if len(tickers) == 1: tickers.append("SPY")
-
-    ## correct common mistakes
-    ## acceptable intervals are 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
-    ## if interval = 1w, map to 1wk
-    if interval == "1w": interval = "1wk"
-    if re.match(r"3m$", interval): interval = "3mo"
-    if interval == "day": interval = "1d"
-    if interval == "week": interval = "1wk"
-    if interval == "month": interval = "1mo"
-
     click.echo(f"Generating plot for {','.join(tickers)} since {since.date()}. Interval: {interval}")
-
-    df = yfinance.download(tickers, start=since, interval=interval)["Adj Close"]
     
     #Normalize the price data (so we can compare them, all tickers start at $100)
     df = df.div(df.iloc[0]).mul(100)
