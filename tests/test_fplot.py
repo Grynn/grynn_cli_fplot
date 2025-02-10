@@ -1,9 +1,8 @@
 import unittest
 from datetime import datetime
-from .fplot import parse_start_date
+from grynn_fplot.core import parse_start_date
 
 class TestParseDate(unittest.TestCase):
-
     def test_none_date(self):
         self.assertIsInstance(parse_start_date(None), datetime)
 
@@ -12,7 +11,14 @@ class TestParseDate(unittest.TestCase):
         self.assertEqual(result, datetime(datetime.now().year, 1, 1))
 
     def test_last_3_months(self):
-        test_strings = ["last 3 months", "last 3 mos", "last 3mo", "3mths", "3m ago", "3m"]
+        test_strings = [
+            "last 3 months",
+            "last 3 mos",
+            "last 3mo",
+            "3mths",
+            "3m ago",
+            "3m",
+        ]
         r1 = parse_start_date("last 3 months")
         for test_string in test_strings:
             result = parse_start_date(test_string)
@@ -49,13 +55,12 @@ class TestParseDate(unittest.TestCase):
     def test_invalid_type(self):
         with self.assertRaises(ValueError):
             parse_start_date(12345)
-        
+
         with self.assertRaises(ValueError):
             parse_start_date("junk week")
 
         with self.assertRaises(ValueError):
             parse_start_date("invalid date")
-
 
 
 if __name__ == "__main__":

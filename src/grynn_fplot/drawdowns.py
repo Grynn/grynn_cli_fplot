@@ -1,8 +1,9 @@
-#%%
+# %%
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+
 
 def plot_drawdowns(data):
     """
@@ -21,11 +22,11 @@ def plot_drawdowns(data):
         plt.plot(data.index, drawdowns, lw=1, label=ticker)
         plt.fill_between(data.index, drawdowns, alpha=0.5)
 
-    plt.title(f'Drawdown Chart for {", ".join(tickers)}')
-    plt.xlabel('Date')
-    plt.ylabel('Drawdown')
+    plt.title(f"Drawdown Chart for {', '.join(tickers)}")
+    plt.xlabel("Date")
+    plt.ylabel("Drawdown")
     plt.grid(True)
-    plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    plt.gca().yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
     plt.legend()
     plt.show()
 
@@ -46,15 +47,15 @@ def plot_returns(data):
     for ticker in columns:
         initial_value = data[ticker].iloc[0]
         drawdowns = (data[ticker] - initial_value) / initial_value
-        line, = plt.plot([], [], lw=1, label=ticker)
+        (line,) = plt.plot([], [], lw=1, label=ticker)
         plt.fill_between(data.index, drawdowns, alpha=0.5)
         lines.append(line)
 
-    plt.title(f'Drawdown Chart for {", ".join(tickers)}')
-    plt.xlabel('Date')
-    plt.ylabel('Drawdown')
+    plt.title(f"Drawdown Chart for {', '.join(tickers)}")
+    plt.xlabel("Date")
+    plt.ylabel("Drawdown")
     plt.grid(True)
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f'{x:.0%}'))
+    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
     plt.legend()
     plt.show()
 
@@ -65,13 +66,14 @@ def plot_returns(data):
             line.set_data(data.index[i:], drawdowns[i:])
         return lines
 
-    ani = animation.FuncAnimation(fig, animate, frames=len(data), interval=200, blit=True)
-    #display(ani.to_html5_video())
-    
+    ani = animation.FuncAnimation(
+        fig, animate, frames=len(data), interval=200, blit=True
+    )
+    # display(ani.to_html5_video())
 
 
-tickers = ['TSLA', 'QQQ', 'AAPL']
-period = '5y'
+tickers = ["TSLA", "QQQ", "AAPL"]
+period = "5y"
 data = yf.download(tickers, period=period)["Adj Close"]
 plot_returns(data)
 plot_drawdowns(data)
