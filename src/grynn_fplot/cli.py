@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import mplcursors
 import numpy as np
 from datetime import datetime
+from sklearn.metrics import auc
 
 from .core import (
     parse_start_date,
@@ -97,6 +98,13 @@ def display_plot(ticker, since, interval):
     plt.tight_layout()
     plt.show()
 
+def display_auc():
+    # Compute drawdowns for ticker x
+    # show the drawdowns plot and area under curve
+    # if there are multiple tickers, show the area under curve for all of them
+    # divide UI into two parts (top is the chart, bottom is the AUC table)
+    
 
+#%%
 if __name__ == "__main__":
     display_plot()

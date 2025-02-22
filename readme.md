@@ -13,5 +13,8 @@ Still in development, so not yet available on PyPI.
 fplot <ticker> [--since <date>] [--interval <interval>]
 ```
 
-Example:
-`fplot AAPL --since ytd`
+Examples:
+
+- `fplot AAPL`
+- `fplot AAPL --since 2020`
+- `fplot AAPL,TSLA --since "mar 2023"`

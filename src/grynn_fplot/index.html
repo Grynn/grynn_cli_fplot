@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Chart</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/debug@4.3.4/dist/debug.js"></script>
+    <style>
+        .period-btn {
+            margin: 5px;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .controls {
+            margin: 10px 0;
+        }
+    </style>
+    <script>
+        // Setup debug
+        const log = debug('fplot');
+        // Enable logging by default in development
+        debug.enable('fplot');
+        
+        // To enable/disable logging from console:
+        // debug.enable('fplot') - enable
+        // debug.disable() - disable
+    </script>
+</head>
+<body>
+    <div class="controls">
+        <input type="text" id="ticker" placeholder="Enter ticker symbol">
+        <button onclick="fetchData()">Plot</button>
+    </div>
+    <div class="controls">
+        <button class="period-btn" onclick="setPeriod('3m')">3M</button>
+        <button class="period-btn" onclick="setPeriod('6m')">6M</button>
+        <button class="period-btn" onclick="setPeriod('1y')">1Y</button>
+        <button class="period-btn" onclick="setPeriod('2y')">2Y</button>
+        <button class="period-btn" onclick="setPeriod('5y')">5Y</button>
+        <button class="period-btn" onclick="setPeriod('max')">MAX</button>
+    </div>
+    <div id="chart"></div>
+    <script>
+        let currentPeriod = 'max';
+
+        function setPeriod(period) {
+            log(`Setting period to ${period}`);
+            currentPeriod = period;
+            fetchData();
+        }
+
+        async function fetchData() {
+            const ticker = document.getElementById('ticker').value;
+            if (!ticker) return;
+
+            const url = `/data?ticker=${ticker}&since=${currentPeriod}`;
+            log(`Fetching data from ${url}`);
+            
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                log(`Received response:`, {
+                    status: response.status,
+                    dataPoints: data.dates?.length || 0,
+                    ticker
+                });
+                
+                if (response.status === 404) {
+                    log.error(`Error: ${data.error}`);
+                    alert(data.error);
+                    return;
+                }
+
+                const traces = [
+                    {
+                        x: data.dates,
+                        y: Object.values(data.price)[0],
+                        name: 'Price',
+                        type: 'scatter'
+                    },
+                    {
+                        x: data.dates,
+                        y: Object.values(data.drawdown)[0],
+                        name: 'Drawdown',
+                        type: 'scatter',
+                        yaxis: 'y2'
+                    }
+                ];
+
+                const layout = {
+                    title: `${ticker} Price and Drawdown`,
+                    yaxis: {title: 'Normalized Price'},
+                    yaxis2: {
+                        title: 'Drawdown',
+                        overlaying: 'y',
+                        side: 'right'
+                    },
+                    showlegend: true,
+                    dragmode: 'zoom'
+                };
+
+                Plotly.newPlot('chart', traces, layout);
+                
+                log(`Plot rendered for ${ticker}`);
+            } catch (error) {
+                log.error(`Failed to fetch/render data:`, error);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -5,11 +5,13 @@ import yfinance
 import pandas as pd
 
 
-def parse_start_date(date_or_offset) -> datetime:
+def parse_start_date(date_or_offset) -> datetime | None:
     if date_or_offset is None:
         return datetime.now() - relativedelta(years=1)
     elif isinstance(date_or_offset, str):
-        if date_or_offset.upper() == "YTD":
+        if date_or_offset.lower() == "max":
+            return None
+        elif date_or_offset.upper() == "YTD":
             return datetime(datetime.now().year, 1, 1)
         elif re.match(
             r"^(?:last\s*)?(\d+)\s*(m|mos|mths|mo|months|days|d|yrs|yr|y|weeks?|wks?|wk)\s*(?:ago)?$",
@@ -72,9 +74,12 @@ def download_ticker_data(ticker, since, interval="1d"):
     }
     interval = interval_corrections.get(interval, interval)
 
-    df = yfinance.download(tickers, start=since, interval=interval, auto_adjust=False)[
-        "Adj Close"
-    ]
+    # Only pass start parameter if since is not None
+    kwargs = {"interval": interval, "auto_adjust": False}
+    if since is not None:
+        kwargs["start"] = since
+
+    df = yfinance.download(tickers, **kwargs)["Adj Close"]
     if isinstance(df, pd.Series):
         df = df.to_frame()
     return df
