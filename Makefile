@@ -1,23 +1,19 @@
 .PHONY: install clean test lint format coverage dev
 
+test: 
+	uv run pytest
+
 install:
-	uv tool install .
+	uv tool install -P "grynn_fplot @ $$PWD" "grynn_fplot @ $$PWD"
 
 dev: 
-	uv pip install ".[dev]"
-
-test: install
-	uv run pytest
+	uv sync --all-extras
 
 coverage: dev
 	uv run pytest --cov=src/grynn_cli_fplot --cov-report=term-missing
 
 lint: dev
-	uvx ruff check src tests
-	uvx mypy src tests
-
-format: dev
-	uvx ruff format src tests
+	uvx ruff check 
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

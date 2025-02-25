@@ -1,31 +1,30 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "grynn_fplot"
 version = "0.2.2"
 description = "CLI tool for plotting financial data"
 authors = [{ name = "Grynn", email = "vishal.doshi@gmail.com" }]
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
-    "click~=8.1.7",
-    "yfinance~=0.2.54",
-    "matplotlib ~= 3.9.2",
+    "click ~= 8.1.7",
+    "yfinance >= 0.2.54",
+    "matplotlib >= 3.9.2",
     "dateparser ~= 1.2.0",
     "mplcursors ~= 0.5.3",
     "fastapi ~= 0.115.0",
     "uvicorn ~= 0.32.0",
-    "scikit-learn>=1.6.1",
+    "scikit-learn >= 1.6.1",
+    "grynn-pylib",
+    "ipywidgets>=8.1.5",
 ]
 
 [project.scripts]
 fplot = "grynn_fplot.cli:display_plot"
 
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[dependency-groups]
+[project.optional-dependencies]
 dev = [
     "ipykernel>=6.29.5",
     "ipython>=8.18.1",
@@ -33,3 +32,14 @@ dev = [
     "pytest>=8.3.4",
     "ruff>=0.9.2",
 ]
+
+[tool.uv.sources]
+grynn-pylib = { git = "https://github.com/Grynn/grynn_pylib.git" }
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.1.0",
+]
+
+[tool.ruff]
+line-length = 120

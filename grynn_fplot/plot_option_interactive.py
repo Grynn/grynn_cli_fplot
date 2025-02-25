@@ -40,6 +40,7 @@ ax1.axvline(x=strike, color="gray", linestyle="--", alpha=0.5)
 ax1.axhline(y=0, color="gray", linestyle="-", alpha=0.3)
 ax1.grid(True, alpha=0.3)
 
+
 # Define the update function to accept parameters directly
 @interact(dte=(1, 365, 1), vol=(0.05, 1.0, 0.05), r=(0.01, 0.10, 0.01))
 def update(dte=30, vol=0.2, r=0.05):

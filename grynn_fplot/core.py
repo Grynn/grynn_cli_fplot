@@ -34,9 +34,7 @@ def parse_start_date(date_or_offset) -> datetime | None:
             elif unit in ["w", "wk", "wks", "week", "weeks"]:
                 return datetime.now() - relativedelta(weeks=num)
             else:
-                raise ValueError(
-                    f"Invalid unit: {unit} in expression '{date_or_offset}'"
-                )
+                raise ValueError(f"Invalid unit: {unit} in expression '{date_or_offset}'")
         else:
             try:
                 from dateparser import parse

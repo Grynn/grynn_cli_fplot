@@ -2,6 +2,7 @@ import unittest
 from datetime import datetime
 from grynn_fplot.core import parse_start_date
 
+
 class TestParseDate(unittest.TestCase):
     def test_none_date(self):
         self.assertIsInstance(parse_start_date(None), datetime)

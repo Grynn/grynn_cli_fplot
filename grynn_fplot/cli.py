@@ -3,22 +3,34 @@ import matplotlib.pyplot as plt
 import mplcursors
 import numpy as np
 from datetime import datetime
-from sklearn.metrics import auc
-
-from .core import (
+import tempfile
+import importlib.metadata
+from grynn_fplot.core import (
     parse_start_date,
     download_ticker_data,
     normalize_prices,
     calculate_drawdowns,
 )
 
+try:
+    # if __package__ is None and __name__ == "__main__" this is being run from the cli
+    __version__ = importlib.metadata.version(__package__ or __name__)
+except importlib.metadata.PackageNotFoundError:
+    __version__ = f"unknown (__name__: {__name__})"
+
 
 @click.command()
 @click.option("--since", type=str, default=None)
 @click.option("--interval", type=str, default="1d")
 @click.argument("ticker", type=str, nargs=1, required=True)
-def display_plot(ticker, since, interval):
+@click.option("--version", "-v", is_flag=True, help="Show version and exit")
+@click.option("--debug", is_flag=True, help="Enable debug mode")
+def display_plot(ticker, since, interval, version, debug):
     """Generate a plot of the given ticker(s)"""
+
+    if version:
+        print(f"fplot {__version__}\n")
+        return
 
     since = parse_start_date(since)
 
@@ -29,9 +41,14 @@ def display_plot(ticker, since, interval):
 
     tickers = df.columns.tolist()
 
-    print(
-        f"Generating plot for {', '.join(tickers)} since {since.date()}. Interval: {interval}"
-    )
+    if debug:
+        print(f"Data for {', '.join(tickers)}:")
+        print(df.head())
+        temp_file = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
+        df.to_csv(temp_file.name)
+        print(f"Data saved to temporary file: {temp_file.name}")
+
+    print(f"Generating plot for {', '.join(tickers)} since {since.date()}. Interval: {interval}")
 
     # Normalize the price data
     df_normalized = normalize_prices(df)
@@ -61,9 +78,7 @@ def display_plot(ticker, since, interval):
         ax2.fill_between(df_dd.index, df_dd[t], alpha=0.5, color=colors[i])
     ax2.set_title(f"{', '.join(tickers)} Drawdowns")
     ax2.set_ylabel("Drawdown")
-    ax2.set_xlabel(
-        f"from {since.date()} to {datetime.now().date()} in {interval} intervals"
-    )
+    ax2.set_xlabel(f"from {since.date()} to {datetime.now().date()} in {interval} intervals")
 
     # Add annotations
     for line in ax1.get_lines():
@@ -98,13 +113,15 @@ def display_plot(ticker, since, interval):
     plt.tight_layout()
     plt.show()
 
+
 def display_auc():
     # Compute drawdowns for ticker x
     # show the drawdowns plot and area under curve
     # if there are multiple tickers, show the area under curve for all of them
     # divide UI into two parts (top is the chart, bottom is the AUC table)
-    
+    pass
 
-#%%
+
+# %%
 if __name__ == "__main__":
     display_plot()

@@ -66,9 +66,7 @@ def plot_returns(data):
             line.set_data(data.index[i:], drawdowns[i:])
         return lines
 
-    ani = animation.FuncAnimation(
-        fig, animate, frames=len(data), interval=200, blit=True
-    )
+    animation.FuncAnimation(fig, animate, frames=len(data), interval=200, blit=True)
     # display(ani.to_html5_video())
 
 
