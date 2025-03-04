@@ -1,3 +1,4 @@
+#%%
 import click
 import matplotlib.pyplot as plt
 import mplcursors
@@ -5,11 +6,15 @@ import numpy as np
 from datetime import datetime
 import tempfile
 import importlib.metadata
+from tabulate import tabulate
 from grynn_fplot.core import (
     parse_start_date,
     download_ticker_data,
     normalize_prices,
     calculate_drawdowns,
+    calculate_area_under_curve,
+    calculate_cagr,
+    is_long_term
 )
 
 try:
@@ -34,12 +39,14 @@ def display_plot(ticker, since, interval, version, debug):
 
     since = parse_start_date(since)
 
+    # Download and prepare data
     df = download_ticker_data(ticker, since, interval)
     if df.empty:
-        print(f"No data found for the given tickers({ticker})).")
+        print(f"No data found for the given tickers({ticker}).")
         return
 
     tickers = df.columns.tolist()
+    print(f"Generating plot for {', '.join(tickers)} since {since.date()}. Interval: {interval}")
 
     if debug:
         print(f"Data for {', '.join(tickers)}:")
@@ -48,43 +55,64 @@ def display_plot(ticker, since, interval, version, debug):
         df.to_csv(temp_file.name)
         print(f"Data saved to temporary file: {temp_file.name}")
 
-    print(f"Generating plot for {', '.join(tickers)} since {since.date()}. Interval: {interval}")
-
-    # Normalize the price data
+    # Process data
     df_normalized = normalize_prices(df)
     df_dd = calculate_drawdowns(df_normalized)
-
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), sharex=True)
-
-    # Generate color mapping, assign 'SPY' to gray
+    auc_df = calculate_area_under_curve(df_dd)
+    
+    # Display AUC analysis in CLI
+    print("\n=== Drawdown Area Under Curve Analysis ===")
+    print(tabulate(auc_df, headers='keys', tablefmt='pretty', showindex=False))
+    print("Higher values indicate greater drawdowns over time.\n")
+    
+    # Calculate and display CAGR if time period > 1 year
+    if is_long_term(df):
+        cagr_df = calculate_cagr(df_normalized)
+        print("\n=== Compound Annual Growth Rate (CAGR) ===")
+        print(tabulate(cagr_df, headers='keys', tablefmt='pretty', showindex=False, 
+                       floatfmt=".2%"))  # Format as percentage
+        print("CAGR represents annualized return over the period.\n")
+    
+    # Prepare for plotting
+    auc_values = dict(zip(auc_df['Ticker'], auc_df['AUC']))
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(16, 12), sharex=True, 
+                                   gridspec_kw={'height_ratios': [3, 2], 'hspace': 0.3})
+    
+    # Generate colors for each ticker
     color_map = plt.get_cmap("tab10")
     color_iter = iter(color_map.colors)
-    colors = []
+    colors = [next(color_iter) if t != "SPY" else "darkgrey" for t in tickers]
 
-    for t in tickers:
-        if t == "SPY":
-            colors.append("darkgrey")
-        else:
-            colors.append(next(color_iter))
-
-    # Plot the normalized price data
-    df_normalized.plot(ax=ax1, color=colors)
+    # Plot normalized prices
+    for i, ticker in enumerate(tickers):
+        label = f"{ticker} - AUC: {auc_values[ticker]:.2f}"
+        # Add CAGR to label if applicable
+        if is_long_term(df) and ticker in cagr_df['Ticker'].values:
+            cagr_value = cagr_df.loc[cagr_df['Ticker'] == ticker, 'CAGR'].values[0]
+            label += f" - CAGR: {cagr_value:.2%}"
+        
+        ax1.plot(df_normalized.index, df_normalized[ticker], label=label, color=colors[i])
+    
     ax1.set_title(f"{', '.join(tickers)} Price")
     ax1.set_ylabel("Normalized Price")
+    ax1.legend(loc='best')
 
-    # Plot the drawdowns
-    df_dd.plot(ax=ax2, color=colors)
-    for i, t in enumerate(tickers):
-        ax2.fill_between(df_dd.index, df_dd[t], alpha=0.5, color=colors[i])
+    # Plot drawdowns
+    for i, ticker in enumerate(tickers):
+        ax2.plot(df_dd.index, df_dd[ticker], label=f"{ticker} - AUC: {auc_values[ticker]:.2f}", 
+                color=colors[i])
+        ax2.fill_between(df_dd.index, df_dd[ticker], alpha=0.5, color=colors[i])
+    
     ax2.set_title(f"{', '.join(tickers)} Drawdowns")
     ax2.set_ylabel("Drawdown")
     ax2.set_xlabel(f"from {since.date()} to {datetime.now().date()} in {interval} intervals")
+    ax2.legend(loc='best')
 
-    # Add annotations
+    # Add end-point annotations
     for line in ax1.get_lines():
         y = line.get_ydata()[-1]
         x = line.get_xdata()[-1]
-        label = line.get_label()
+        label = line.get_label().split(' - ')[0]  # Extract just the ticker part
 
         # Handle masked values
         if isinstance(y, np.ma.core.MaskedConstant):
@@ -94,34 +122,22 @@ def display_plot(ticker, since, interval, version, debug):
 
         ax1.annotate(f"{label}: {value_text}", xy=(x, y), color=line.get_color())
 
-    # Add interactive features
-    mplcursors.cursor(ax1).connect(
-        "add",
-        lambda sel: (
-            sel.annotation.set_text(f"{sel.artist.get_label()}: {sel.target[1]:.2f}"),
-            sel.annotation.get_bbox_patch().set(fc=sel.artist.get_color()),
-        ),
-    )
-    mplcursors.cursor(ax2).connect(
-        "add",
-        lambda sel: (
-            sel.annotation.set_text(f"{sel.artist.get_label()}: {sel.target[1]:.2f}"),
-            sel.annotation.get_bbox_patch().set(fc=sel.artist.get_color()),
-        ),
-    )
-
+    # Add interactive cursor functionality
+    cursor1 = mplcursors.cursor(ax1)
+    cursor1.connect("add", lambda sel: (
+        sel.annotation.set_text(f"{sel.artist.get_label().split(' - ')[0]}: {sel.target[1]:.2f}"),
+        sel.annotation.get_bbox_patch().set(fc=sel.artist.get_color())
+    ))
+    
+    cursor2 = mplcursors.cursor(ax2)
+    cursor2.connect("add", lambda sel: (
+        sel.annotation.set_text(f"{sel.artist.get_label().split(' - ')[0]}: {sel.target[1]:.2f}"),
+        sel.annotation.get_bbox_patch().set(fc=sel.artist.get_color())
+    ))
+    
     plt.tight_layout()
     plt.show()
 
 
-def display_auc():
-    # Compute drawdowns for ticker x
-    # show the drawdowns plot and area under curve
-    # if there are multiple tickers, show the area under curve for all of them
-    # divide UI into two parts (top is the chart, bottom is the AUC table)
-    pass
-
-
-# %%
 if __name__ == "__main__":
     display_plot()

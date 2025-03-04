@@ -3,6 +3,8 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 import yfinance
 import pandas as pd
+from sklearn.metrics import auc
+import numpy as np
 
 
 def parse_start_date(date_or_offset) -> datetime | None:
@@ -89,3 +91,53 @@ def normalize_prices(df: pd.Series | pd.DataFrame, start=100):
 
 def calculate_drawdowns(df: pd.Series | pd.DataFrame) -> pd.Series | pd.DataFrame:
     return df.div(df.cummax()).sub(1)
+
+
+def calculate_area_under_curve(df_dd):
+    """Calculate area under curve for drawdown dataframe using sklearn.auc"""
+    auc_values = {}
+    for column in df_dd.columns:
+        # Get x and y values, dropping NaN values
+        data = df_dd[[column]].dropna()
+        if len(data) > 1:
+            # x values are the index positions (time points)
+            x = np.arange(len(data))
+            # y values are the absolute drawdown values
+            y = abs(data[column].values)
+            # Calculate AUC using sklearn's auc function
+            auc_values[column] = auc(x, y)
+        else:
+            auc_values[column] = 0.0
+    return pd.DataFrame(auc_values.items(), columns=['Ticker', 'AUC']).sort_values(by='AUC', ascending=False)
+
+
+def calculate_cagr(df):
+    """Calculate Compound Annual Growth Rate for price data
+    
+    CAGR = (End Value / Start Value)^(1 / Years) - 1
+    """
+    # Calculate total years
+    start_date = df.index[0]
+    end_date = df.index[-1]
+    years = (end_date - start_date).days / 365.25
+    
+    if years <= 1:
+        return None  # CAGR only makes sense for periods > 1 year
+    
+    cagr = {}
+    for column in df.columns:
+        start_value = df[column].iloc[0]
+        end_value = df[column].iloc[-1]
+        if start_value > 0:  # Avoid division by zero
+            cagr[column] = (end_value / start_value) ** (1 / years) - 1
+        else:
+            cagr[column] = None
+            
+    return pd.DataFrame(list(cagr.items()), columns=['Ticker', 'CAGR']).sort_values(by='CAGR', ascending=False)
+
+
+def is_long_term(df):
+    """Check if the time frame is more than 1 year (365 days)"""
+    start_date = df.index[0]
+    end_date = df.index[-1]
+    return (end_date - start_date).days > 365
