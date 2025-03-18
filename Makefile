@@ -4,7 +4,7 @@ test:
 	uv run pytest
 
 install:
-	uv tool install -P "grynn_fplot @ $$PWD" "grynn_fplot @ $$PWD"
+	uv tool install --upgrade-package "grynn_fplot" "grynn_fplot @ $$PWD"
 
 dev: 
 	uv sync --all-extras
