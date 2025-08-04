@@ -6,16 +6,31 @@ Tests multiple ticker support and browser layout optimizations
 import unittest
 import sys
 import os
+import pandas as pd
+import yfinance
+from grynn_fplot.core import download_ticker_data, parse_start_date
+
+
+def _dummy_yfinance_download(tickers, **kwargs):
+    dates = pd.date_range(start="2020-01-01", periods=3, freq="D")
+    if isinstance(tickers, str):
+        tickers_list = [t.strip().upper() for t in tickers.split(",")]
+    else:
+        tickers_list = [str(t).upper() for t in tickers]
+    df = pd.DataFrame({t: [float(i) for i in range(len(dates))] for t in tickers_list}, index=dates)
+    return pd.concat({"Adj Close": df}, axis=1)
+
+
+yfinance.download = _dummy_yfinance_download
 
 # Add the parent directory to the path to import modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from grynn_fplot.core import download_ticker_data, parse_start_date
 
 # Import test dependencies when available
 try:
     from fastapi.testclient import TestClient
     from grynn_fplot.web_api import app
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -25,25 +40,25 @@ except ImportError:
 
 class TestMultipleTickerSupport(unittest.TestCase):
     """Test multiple ticker support that should work in both CLI and web versions"""
-    
+
     def test_multiple_ticker_data_download(self):
         """Test that core functionality supports multiple tickers like 'AAPL,TSLA'"""
         # Test comma-separated tickers
         ticker_string = "AAPL,TSLA"
         since_date = parse_start_date("3m")
-        
+
         # This should work with the core download function
         df = download_ticker_data(ticker_string, since_date, "1d")
-        
+
         if df is not None and not df.empty:
             # Check that both tickers are present
             self.assertIn("AAPL", df.columns)
             self.assertIn("TSLA", df.columns)
             self.assertEqual(len(df.columns), 2)
-            
+
             # Check data integrity
             self.assertGreater(len(df), 0)
-            
+
             # Check that data is not all NaN
             self.assertFalse(df["AAPL"].isna().all())
             self.assertFalse(df["TSLA"].isna().all())
@@ -55,14 +70,14 @@ class TestMultipleTickerSupport(unittest.TestCase):
         test_cases = [
             "AAPL,TSLA",
             "AAPL, TSLA",  # With space
-            "aapl,tsla",   # Lowercase
+            "aapl,tsla",  # Lowercase
         ]
-        
+
         for ticker_string in test_cases:
             with self.subTest(ticker_string=ticker_string):
                 since_date = parse_start_date("1m")
                 df = download_ticker_data(ticker_string, since_date, "1d")
-                
+
                 if df is not None and not df.empty:
                     # Should have 2 columns regardless of input format
                     self.assertEqual(len(df.columns), 2)
@@ -74,9 +89,9 @@ class TestMultipleTickerSupport(unittest.TestCase):
         """Test support for three tickers like 'AAPL,TSLA,SPY'"""
         ticker_string = "AAPL,TSLA,SPY"
         since_date = parse_start_date("1m")
-        
+
         df = download_ticker_data(ticker_string, since_date, "1d")
-        
+
         if df is not None and not df.empty:
             # Should have all three tickers
             self.assertEqual(len(df.columns), 3)
@@ -87,7 +102,7 @@ class TestMultipleTickerSupport(unittest.TestCase):
 @unittest.skipIf(not FASTAPI_AVAILABLE, "FastAPI not available")
 class TestWebAPI(unittest.TestCase):
     """Test web API endpoints"""
-    
+
     def setUp(self):
         """Set up test client"""
         self.client = TestClient(app)
@@ -106,7 +121,7 @@ class TestWebAPI(unittest.TestCase):
         response = self.client.get("/api/config")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        
+
         # Check required config sections
         required_sections = ["timeRanges", "intervals", "indicators", "themes", "exportFormats"]
         for section in required_sections:
@@ -117,12 +132,12 @@ class TestWebAPI(unittest.TestCase):
         response = self.client.get("/api/data?ticker=AAPL&since=1m&interval=1d")
         if response.status_code == 200:
             data = response.json()
-            
+
             # Check response structure
             required_fields = ["dates", "price", "drawdown", "raw_price", "tickers"]
             for field in required_fields:
                 self.assertIn(field, data)
-            
+
             self.assertIn("AAPL", data["tickers"])
         else:
             self.skipTest("Unable to fetch test data - network/API issue")
@@ -130,15 +145,15 @@ class TestWebAPI(unittest.TestCase):
     def test_multiple_tickers_web_api(self):
         """Test web API with multiple tickers - the key functionality"""
         response = self.client.get("/api/data?ticker=AAPL,TSLA&since=1m&interval=1d")
-        
+
         if response.status_code == 200:
             data = response.json()
-            
+
             # Check both tickers are present
             self.assertIn("AAPL", data["tickers"])
             self.assertIn("TSLA", data["tickers"])
             self.assertEqual(len(data["tickers"]), 2)
-            
+
             # Check both tickers have data
             for ticker in ["AAPL", "TSLA"]:
                 self.assertIn(ticker, data["price"])
@@ -150,10 +165,10 @@ class TestWebAPI(unittest.TestCase):
     def test_multiple_tickers_with_spaces(self):
         """Test multiple tickers with spaces"""
         response = self.client.get("/api/data?ticker=AAPL, TSLA, SPY&since=1m&interval=1d")
-        
+
         if response.status_code == 200:
             data = response.json()
-            
+
             # Should handle spaces and have all three tickers
             self.assertEqual(len(data["tickers"]), 3)
             for ticker in ["AAPL", "TSLA", "SPY"]:
@@ -166,14 +181,14 @@ class TestWebAPI(unittest.TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         content = response.text
-        
+
         # Check that interval controls are removed
-        self.assertNotIn('Interval:', content)
+        self.assertNotIn("Interval:", content)
         self.assertNotIn('onclick="setInterval', content)
-        
+
         # Check for height optimization
-        self.assertIn('height: 100vh', content)
-        self.assertIn('overflow: hidden', content)
+        self.assertIn("height: 100vh", content)
+        self.assertIn("overflow: hidden", content)
 
     def test_export_functionality(self):
         """Test data export functionality"""
@@ -184,7 +199,7 @@ class TestWebAPI(unittest.TestCase):
             self.assertIn("content", data)
             self.assertIn("filename", data)
             self.assertTrue(data["filename"].endswith(".csv"))
-        
+
         # Test JSON export
         response = self.client.get("/api/export/json?ticker=AAPL&since=1m&interval=1d")
         if response.status_code == 200:
@@ -196,7 +211,7 @@ class TestWebAPI(unittest.TestCase):
 
 class TestWebInterfaceLayout(unittest.TestCase):
     """Test web interface layout and no-scroll optimization"""
-    
+
     @unittest.skipIf(not FASTAPI_AVAILABLE, "FastAPI not available")
     def test_no_scroll_layout(self):
         """Test that web interface is optimized for no scrolling"""
@@ -204,47 +219,47 @@ class TestWebInterfaceLayout(unittest.TestCase):
         response = client.get("/")
         self.assertEqual(response.status_code, 200)
         content = response.text
-        
+
         # Check for specific height optimizations
         height_optimizations = [
-            'height: 100vh',           # Full viewport height
-            'overflow: hidden',        # No scroll
-            'calc(100vh - 170px)',     # Optimized chart container height
+            "height: 100vh",  # Full viewport height
+            "overflow: hidden",  # No scroll
+            "calc(100vh - 170px)",  # Optimized chart container height
         ]
-        
+
         for optimization in height_optimizations:
             self.assertIn(optimization, content)
 
-    @unittest.skipIf(not FASTAPI_AVAILABLE, "FastAPI not available") 
+    @unittest.skipIf(not FASTAPI_AVAILABLE, "FastAPI not available")
     def test_interval_controls_removed(self):
         """Test that interval controls are completely removed"""
         client = TestClient(app)
         response = client.get("/")
         self.assertEqual(response.status_code, 200)
         content = response.text
-        
+
         # These should NOT be present (interval-specific controls)
         interval_elements = [
-            'Interval:',
+            "Interval:",
             'onclick="setInterval(',  # Our custom setInterval function, not the built-in one
-            'interval-btn',   # CSS class for interval buttons
-            'setInterval(\'1d\')',   # Interval setting function calls
-            'setInterval(\'1w\')',   
-            'setInterval(\'1m\')',
+            "interval-btn",  # CSS class for interval buttons
+            "setInterval('1d')",  # Interval setting function calls
+            "setInterval('1w')",
+            "setInterval('1m')",
         ]
-        
+
         for element in interval_elements:
             self.assertNotIn(element, content)
 
     def test_time_period_parsing(self):
         """Test that various time periods work correctly"""
         test_periods = ["1m", "3m", "6m", "1y", "2y", "5y"]
-        
+
         for period in test_periods:
             with self.subTest(period=period):
                 parsed_date = parse_start_date(period)
                 self.assertIsNotNone(parsed_date)
-        
+
         # Test that "max" returns None (meaning go back to earliest data)
         max_date = parse_start_date("max")
         self.assertIsNone(max_date)
@@ -252,26 +267,26 @@ class TestWebInterfaceLayout(unittest.TestCase):
 
 class TestCLIWebCompatibility(unittest.TestCase):
     """Test that CLI features work properly in web version"""
-    
+
     def test_cli_ticker_format_compatibility(self):
         """Test that CLI ticker formats work in web interface"""
         # These are the exact formats that work in CLI
         cli_formats = [
-            "AAPL,TSLA",      # Basic format
-            "AAPL, TSLA",     # With space
-            "SPY,QQQ,VTI",    # Three tickers
+            "AAPL,TSLA",  # Basic format
+            "AAPL, TSLA",  # With space
+            "SPY,QQQ,VTI",  # Three tickers
         ]
-        
+
         for format_str in cli_formats:
             with self.subTest(format=format_str):
                 # Test the parsing works
-                tickers = [t.strip().upper() for t in format_str.split(',')]
+                tickers = [t.strip().upper() for t in format_str.split(",")]
                 self.assertGreater(len(tickers), 1)
-                
+
                 # Test data download works with this format
                 since_date = parse_start_date("1m")
                 df = download_ticker_data(format_str, since_date, "1d")
-                
+
                 if df is not None and not df.empty:
                     # Should have all requested tickers
                     self.assertEqual(len(df.columns), len(tickers))

@@ -20,9 +20,7 @@ from grynn_fplot.core import (
 )
 
 app = FastAPI(
-    title="Financial Plot API",
-    description="Interactive financial charting API with advanced features",
-    version="2.0.0"
+    title="Financial Plot API", description="Interactive financial charting API with advanced features", version="2.0.0"
 )
 
 
@@ -36,12 +34,7 @@ def index():
 
 
 @app.get("/api/data")
-def get_data(
-    ticker: str,
-    since: str = None,
-    interval: str = "1d",
-    indicators: Optional[str] = None
-):
+def get_data(ticker: str, since: str = None, interval: str = "1d", indicators: Optional[str] = None):
     """Get financial data for charting with optional technical indicators"""
     try:
         since_date = parse_start_date(since)
@@ -61,17 +54,17 @@ def get_data(
 
         # Calculate additional metrics
         df_auc = calculate_area_under_curve(df_dd)
-        
+
         # Calculate CAGR if time period >= 1 year
         df_days = (df.index[-1] - df.index[0]).days
         cagr_data = None
         if df_days >= 365:
-            cagr_data = calculate_cagr(df_normalized).to_dict('records')
+            cagr_data = calculate_cagr(df_normalized).to_dict("records")
 
         # Add technical indicators if requested
         indicators_data = {}
         if indicators:
-            indicator_list = indicators.split(',')
+            indicator_list = indicators.split(",")
             indicators_data = calculate_technical_indicators(df, indicator_list)
 
         data = {
@@ -79,7 +72,7 @@ def get_data(
             "price": df_normalized.to_dict(orient="list"),
             "drawdown": df_dd.to_dict(orient="list"),
             "raw_price": df.to_dict(orient="list"),
-            "auc": df_auc.to_dict('records'),
+            "auc": df_auc.to_dict("records"),
             "cagr": cagr_data,
             "indicators": indicators_data,
             "period_days": df_days,
@@ -88,11 +81,11 @@ def get_data(
             "end_date": df.index[-1].strftime("%Y-%m-%d"),
             "total_return": {
                 ticker: float(
-                    ((df_normalized[ticker].iloc[-1] - df_normalized[ticker].iloc[0]) 
-                     / df_normalized[ticker].iloc[0]) * 100
+                    ((df_normalized[ticker].iloc[-1] - df_normalized[ticker].iloc[0]) / df_normalized[ticker].iloc[0])
+                    * 100
                 )
                 for ticker in df.columns
-            }
+            },
         }
 
         return JSONResponse(content=data)
@@ -103,39 +96,39 @@ def get_data(
 
 def calculate_technical_indicators(df, indicators: List[str]) -> Dict[str, Any]:
     """Calculate technical indicators for the data"""
-    
+
     results = {}
-    
+
     for indicator in indicators:
         indicator = indicator.strip().lower()
-        
-        if indicator.startswith('ma_'):
+
+        if indicator.startswith("ma_"):
             # Moving average
-            period = int(indicator.split('_')[1])
+            period = int(indicator.split("_")[1])
             for ticker in df.columns:
                 ma_key = f"{ticker}_MA_{period}"
                 results[ma_key] = df[ticker].rolling(window=period).mean().tolist()
-                
-        elif indicator == 'rsi':
+
+        elif indicator == "rsi":
             # RSI calculation (simplified)
             for ticker in df.columns:
                 rsi_key = f"{ticker}_RSI"
                 results[rsi_key] = calculate_rsi(df[ticker]).tolist()
-                
-        elif indicator == 'macd':
+
+        elif indicator == "macd":
             # MACD calculation (simplified)
             for ticker in df.columns:
                 macd_data = calculate_macd(df[ticker])
-                results[f"{ticker}_MACD"] = macd_data['macd'].tolist()
-                results[f"{ticker}_MACD_signal"] = macd_data['signal'].tolist()
-                results[f"{ticker}_MACD_histogram"] = macd_data['histogram'].tolist()
-    
+                results[f"{ticker}_MACD"] = macd_data["macd"].tolist()
+                results[f"{ticker}_MACD_signal"] = macd_data["signal"].tolist()
+                results[f"{ticker}_MACD_histogram"] = macd_data["histogram"].tolist()
+
     return results
 
 
 def calculate_rsi(price_series, period=14):
     """Calculate RSI indicator"""
-    
+
     delta = price_series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
@@ -146,18 +139,14 @@ def calculate_rsi(price_series, period=14):
 
 def calculate_macd(price_series, fast=12, slow=26, signal=9):
     """Calculate MACD indicator"""
-    
+
     ema_fast = price_series.ewm(span=fast).mean()
     ema_slow = price_series.ewm(span=slow).mean()
     macd = ema_fast - ema_slow
     signal_line = macd.ewm(span=signal).mean()
     histogram = macd - signal_line
-    
-    return {
-        'macd': macd.fillna(0),
-        'signal': signal_line.fillna(0),
-        'histogram': histogram.fillna(0)
-    }
+
+    return {"macd": macd.fillna(0), "signal": signal_line.fillna(0), "histogram": histogram.fillna(0)}
 
 
 @app.get("/api/export/{format}")
@@ -167,26 +156,25 @@ def export_data(format: str, ticker: str, since: str = None, interval: str = "1d
         # Get the data
         data_response = get_data(ticker, since, interval)
         data = json.loads(data_response.body.decode())
-        
+
         if format.lower() == "csv":
             csv_content = convert_to_csv(data)
             filename = f"{ticker}_{since or 'max'}_{interval}.csv"
-            
+
             return JSONResponse(
-                content={"content": csv_content, "filename": filename},
-                headers={"Content-Type": "application/json"}
+                content={"content": csv_content, "filename": filename}, headers={"Content-Type": "application/json"}
             )
-        
+
         elif format.lower() == "json":
             filename = f"{ticker}_{since or 'max'}_{interval}.json"
             return JSONResponse(
                 content={"content": json.dumps(data, indent=2), "filename": filename},
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
             )
-        
+
         else:
             raise HTTPException(status_code=400, detail="Unsupported format. Use 'csv' or 'json'.")
-            
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error exporting data: {str(e)}")
 
@@ -195,22 +183,18 @@ def convert_to_csv(data):
     """Convert JSON data to CSV format"""
     dates = data["dates"]
     tickers = data["tickers"]
-    
+
     # Create header
     headers = ["Date"]
     for ticker in tickers:
-        headers.extend([
-            f"{ticker}_Price", 
-            f"{ticker}_Drawdown", 
-            f"{ticker}_Raw_Price"
-        ])
-    
+        headers.extend([f"{ticker}_Price", f"{ticker}_Drawdown", f"{ticker}_Raw_Price"])
+
     # Add indicator headers
     for indicator_key in data["indicators"].keys():
         headers.append(indicator_key)
-    
+
     csv_lines = [",".join(headers)]
-    
+
     # Add data rows
     for i, date in enumerate(dates):
         row = [date]
@@ -219,14 +203,14 @@ def convert_to_csv(data):
             drawdown = data["drawdown"][ticker][i] if i < len(data["drawdown"][ticker]) else ""
             raw_price = data["raw_price"][ticker][i] if i < len(data["raw_price"][ticker]) else ""
             row.extend([str(price), str(drawdown), str(raw_price)])
-        
+
         # Add indicator values
         for indicator_key, indicator_values in data["indicators"].items():
             value = indicator_values[i] if i < len(indicator_values) else ""
             row.append(str(value))
-            
+
         csv_lines.append(",".join(row))
-    
+
     return "\n".join(csv_lines)
 
 
@@ -234,8 +218,8 @@ def convert_to_csv(data):
 def compare_tickers(tickers: str, since: str = None, interval: str = "1d"):
     """Compare multiple tickers side by side"""
     try:
-        ticker_list = [t.strip().upper() for t in tickers.split(',')]
-        
+        ticker_list = [t.strip().upper() for t in tickers.split(",")]
+
         all_data = {}
         for ticker in ticker_list:
             try:
@@ -245,27 +229,23 @@ def compare_tickers(tickers: str, since: str = None, interval: str = "1d"):
             except Exception as e:
                 print(f"Error fetching data for {ticker}: {e}")
                 continue
-        
+
         if not all_data:
             raise HTTPException(status_code=404, detail="No data found for any of the provided tickers")
-        
+
         # Combine data for comparison
-        combined_data = {
-            "tickers": list(all_data.keys()),
-            "comparison": {},
-            "performance": {}
-        }
-        
+        combined_data = {"tickers": list(all_data.keys()), "comparison": {}, "performance": {}}
+
         for ticker, data in all_data.items():
             combined_data["comparison"][ticker] = {
                 "total_return": data["total_return"][ticker],
                 "max_drawdown": min([min(dd_values) for dd_values in data["drawdown"].values()]),
                 "cagr": data["cagr"][0]["CAGR"] if data["cagr"] else None,
-                "period_days": data["period_days"]
+                "period_days": data["period_days"],
             }
-        
+
         return JSONResponse(content=combined_data)
-        
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error comparing tickers: {str(e)}")
 
@@ -302,10 +282,11 @@ def get_config():
             {"label": "MACD", "value": "macd"},
         ],
         "themes": ["dark", "light", "tradingview"],
-        "exportFormats": ["csv", "json"]
+        "exportFormats": ["csv", "json"],
     }
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)

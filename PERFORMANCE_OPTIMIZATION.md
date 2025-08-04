@@ -84,7 +84,7 @@ function trimDataToPeriod(masterData, period) {
     // Calculate start date based on period
     const endDate = new Date(masterData.dates[masterData.dates.length - 1]);
     let startDate = new Date(endDate);
-    
+
     switch(period) {
         case '1m': startDate.setMonth(endDate.getMonth() - 1); break;
         case '3m': startDate.setMonth(endDate.getMonth() - 3); break;
@@ -92,7 +92,7 @@ function trimDataToPeriod(masterData, period) {
         case '1y': startDate.setFullYear(endDate.getFullYear() - 1); break;
         case '2y': startDate.setFullYear(endDate.getFullYear() - 2); break;
     }
-    
+
     // Trim all data arrays and recalculate metrics
     return trimmedData;
 }

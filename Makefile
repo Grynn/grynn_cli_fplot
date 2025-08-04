@@ -1,9 +1,13 @@
-.PHONY: install clean test lint format coverage dev bump_patch
+.PHONY: install clean test lint format coverage dev bump_patch pre-commit pre-commit-install
 
-test: 
+test:
 	uv run pytest
 
-bump: bump_patch
+pre-commit: dev
+	uvx pre-commit run --all-files
+
+pre-commit-install:
+	uvx pre-commit installbump: bump_patch
 
 bump_patch:
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -23,14 +27,17 @@ bump_patch:
 install:
 	uv tool install --upgrade-package "grynn_fplot" "grynn_fplot @ $$PWD"
 
-dev: 
+dev:
 	uv sync --all-extras
 
 coverage: dev
 	uv run pytest --cov=src/grynn_cli_fplot --cov-report=term-missing
 
 lint: dev
-	uvx ruff check 
+	uvx ruff check
+
+format: dev
+	uvx ruff format
 
 clean:
 	find . -type d -name "__pycache__" -exec rm -rf {} +

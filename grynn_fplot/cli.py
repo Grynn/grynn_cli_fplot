@@ -120,12 +120,12 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
     import subprocess
     import time
     import threading
-    
+
     try:
         # Import uvicorn here to avoid import issues
         import uvicorn
         from grynn_fplot.serve import app
-        
+
         # Build the URL
         url = f"http://{host}:{port}"
         if ticker:
@@ -134,24 +134,24 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
                 url += f"?ticker={ticker}&preload=5y"
             else:
                 url += f"?ticker={ticker}&since={since}"
-        
+
         print("🚀 Starting fplot web interface...")
         print(f"📊 Server will be available at: {url}")
-        
+
         if ticker:
             print(f"📈 Pre-loading data for: {ticker}")
-        
+
         # Start browser immediately if requested - don't wait for server
         browser_opened = False
         if not no_browser:
+
             def open_browser_early():
                 nonlocal browser_opened
                 # Try to open browser with a shorter delay
                 time.sleep(0.5)
                 try:
                     # Use npx open-in-browser for better cross-platform support
-                    subprocess.run(["npx", "open-in-browser", url], 
-                                 check=False, capture_output=True, timeout=10)
+                    subprocess.run(["npx", "open-in-browser", url], check=False, capture_output=True, timeout=10)
                     browser_opened = True
                     print(f"🌐 Opening {url} in your default browser...")
                 except subprocess.TimeoutExpired:
@@ -165,6 +165,7 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
                     # Fallback to Python webbrowser
                     try:
                         import webbrowser
+
                         webbrowser.open(url)
                         browser_opened = True
                         print(f"🌐 Opened {url} using fallback method")
@@ -174,18 +175,18 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
                 except Exception as e:
                     print(f"⚠️  Could not open browser automatically: {e}")
                     print(f"📱 Please manually open: {url}")
-            
+
             # Start browser opening in parallel
             threading.Thread(target=open_browser_early, daemon=True).start()
-        
+
         # Configure uvicorn logging
         log_level = "debug" if debug else "info"
-        
+
         print("⚡ Starting server...")
         if not no_browser and not browser_opened:
             print("🌐 Browser will open automatically once server is ready...")
         print("🛑 Press Ctrl+C to stop the server")
-        
+
         # Create uvicorn config for faster startup
         config = uvicorn.Config(
             app,
@@ -194,14 +195,14 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
             log_level=log_level,
             access_log=debug,
             reload=False,  # Disable reload for faster startup
-            workers=1,     # Single worker for CLI mode
-            loop="asyncio"  # Use asyncio for better performance
+            workers=1,  # Single worker for CLI mode
+            loop="asyncio",  # Use asyncio for better performance
         )
-        
+
         # Run the server
         server = uvicorn.Server(config)
         server.run()
-        
+
     except ImportError as e:
         print(f"❌ Error: Required web dependencies not available: {e}")
         print("💡 Make sure FastAPI and uvicorn are installed")

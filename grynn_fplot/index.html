@@ -207,12 +207,12 @@
                 gap: 10px;
                 align-items: stretch;
             }
-            
+
             .controls {
                 flex-direction: column;
                 gap: 10px;
             }
-            
+
             .control-group {
                 flex-wrap: wrap;
             }
@@ -283,21 +283,21 @@
         // Preload 5 years of data by default, then trim for shorter periods
         function preloadDefaultData() {
             const defaultTicker = document.getElementById('ticker').value || 'SPY';
-            
+
             // Preload 5 years of daily data only
             const interval = '1d';
             const masterCacheKey = `${defaultTicker}_master_${interval}`;
-            
+
             if (!masterDataCache.has(masterCacheKey) && !isPreloadingMaster) {
                 isPreloadingMaster = true;
-                
+
                 console.log(`🔄 Preloading 5 years of daily data for ${defaultTicker}...`);
-                
+
                 fetchDataFromAPI(defaultTicker, '5y', interval)
                     .then(data => {
                         masterDataCache.set(masterCacheKey, data);
                         console.log(`✅ Preloaded 5 years of daily data for ${defaultTicker}`);
-                        
+
                         // Show the data immediately
                         const trimmedData = trimDataToPeriod(data, currentPeriod);
                         currentData = trimmedData;
@@ -305,7 +305,7 @@
                         updateStats(trimmedData, defaultTicker);
                         showDataStatus('📊 Data ready (5yr cached)');
                         setTimeout(() => hideError(), 2000);
-                        
+
                         isPreloadingMaster = false;
                     })
                     .catch(error => {
@@ -313,7 +313,7 @@
                         isPreloadingMaster = false;
                     });
             }
-            
+
             // Return the promise for the current period from master data if available
             if (masterDataCache.has(masterCacheKey)) {
                 const masterData = masterDataCache.get(masterCacheKey);
@@ -323,7 +323,7 @@
                 // Fallback to direct API call for current period
                 preloadPromise = fetchDataFromAPI(defaultTicker, currentPeriod, currentInterval);
             }
-            
+
             return preloadPromise;
         }
 
@@ -332,10 +332,10 @@
             if (period === 'max' || period === '5y') {
                 return masterData; // Return full dataset
             }
-            
+
             const endDate = new Date(masterData.dates[masterData.dates.length - 1]);
             let startDate = new Date(endDate);
-            
+
             // Calculate start date based on period
             switch(period) {
                 case '1m':
@@ -356,11 +356,11 @@
                 default:
                     return masterData; // Unknown period, return full data
             }
-            
+
             // Find the index where data should start
             const startIndex = masterData.dates.findIndex(date => new Date(date) >= startDate);
             if (startIndex === -1) return masterData; // If no data found, return full dataset
-            
+
             // Trim all data arrays
             const trimmedData = {
                 ...masterData,
@@ -369,7 +369,7 @@
                 drawdown: {},
                 raw_price: {}
             };
-            
+
             // Trim price data for each ticker
             Object.keys(masterData.price).forEach(ticker => {
                 trimmedData.price[ticker] = masterData.price[ticker].slice(startIndex);
@@ -380,7 +380,7 @@
                     trimmedData.raw_price[ticker] = masterData.raw_price[ticker].slice(startIndex);
                 }
             });
-            
+
             // Recalculate period-specific metrics
             if (trimmedData.dates.length > 0) {
                 const startDateObj = new Date(trimmedData.dates[0]);
@@ -388,7 +388,7 @@
                 trimmedData.period_days = Math.floor((endDateObj - startDateObj) / (1000 * 60 * 60 * 24));
                 trimmedData.start_date = trimmedData.dates[0];
                 trimmedData.end_date = trimmedData.dates[trimmedData.dates.length - 1];
-                
+
                 // Recalculate total return for trimmed period
                 trimmedData.total_return = {};
                 Object.keys(trimmedData.price).forEach(ticker => {
@@ -400,7 +400,7 @@
                     }
                 });
             }
-            
+
             return trimmedData;
         }
 
@@ -466,7 +466,7 @@
             document.querySelectorAll('.period-btn').forEach(btn => btn.classList.remove('active'));
             event.target.classList.add('active');
             currentPeriod = period;
-            
+
             const ticker = document.getElementById('ticker').value.toUpperCase();
             if (ticker) {
                 // Try to use master data cache first
@@ -475,7 +475,7 @@
                     console.log(`🚀 Using cached 5yr data, trimming to ${period}`);
                     const masterData = masterDataCache.get(masterCacheKey);
                     const trimmedData = trimDataToPeriod(masterData, period);
-                    
+
                     currentData = trimmedData;
                     updateCharts(trimmedData, ticker);
                     updateStats(trimmedData, ticker);
@@ -501,14 +501,14 @@
         // Direct API call function (separated from caching logic)
         async function fetchDataFromAPI(ticker, period, interval) {
             const url = `/data?ticker=${ticker}&since=${period}&interval=${interval}`;
-            
+
             const response = await fetch(url);
             const data = await response.json();
-            
+
             if (response.status === 404) {
                 throw new Error(data.error);
             }
-            
+
             return data;
         }
 
@@ -519,7 +519,7 @@
                 console.log(`🚀 Using master cache for ${ticker} ${period} ${interval}`);
                 const masterData = masterDataCache.get(masterCacheKey);
                 const trimmedData = trimDataToPeriod(masterData, period);
-                
+
                 if (updateUI) {
                     currentData = trimmedData;
                     updateCharts(trimmedData, ticker);
@@ -529,7 +529,7 @@
                 }
                 return trimmedData;
             }
-            
+
             // Second, try regular cache
             const cacheKey = `${ticker}_${period}_${interval}`;
             if (dataCache.has(cacheKey)) {
@@ -549,20 +549,20 @@
             if (updateUI) {
                 showLoading(true);
             }
-            
+
             try {
                 console.log(`🌐 API call for ${ticker} ${period} ${interval}`);
                 const data = await fetchDataFromAPI(ticker, period, interval);
-                
+
                 // Cache the result
                 dataCache.set(cacheKey, data);
-                
+
                 // If this is a 5yr call, also cache as master data
                 if (period === '5y') {
                     masterDataCache.set(masterCacheKey, data);
                     console.log(`💾 Cached as master data: ${masterCacheKey}`);
                 }
-                
+
                 if (updateUI) {
                     currentData = data;
                     updateCharts(data, ticker);
@@ -570,9 +570,9 @@
                     showDataStatus('📈 Fresh data loaded');
                     setTimeout(() => hideError(), 2000);
                 }
-                
+
                 return data;
-                
+
             } catch (error) {
                 if (updateUI) showError(`Failed to fetch data: ${error.message}`);
                 throw error;
@@ -590,7 +590,7 @@
 
             try {
                 await fetchDataInternal(ticker, currentPeriod, currentInterval, true);
-                
+
                 // Start preloading master data if not already cached
                 const masterCacheKey = `${ticker}_master_1d`;
                 if (!masterDataCache.has(masterCacheKey) && !isPreloadingMaster) {
@@ -599,7 +599,7 @@
                         if (!masterDataCache.has(masterCacheKey) && !isPreloadingMaster) {
                             console.log(`🔄 Background preload of 5yr daily data for ${ticker}...`);
                             isPreloadingMaster = true;
-                            
+
                             fetchDataFromAPI(ticker, '5y', '1d')
                                 .then(data => {
                                     masterDataCache.set(masterCacheKey, data);
@@ -636,7 +636,7 @@
             // Process data for charts
             const dates = data.dates;
             const tickers = Object.keys(data.price);
-            
+
             // Create series for each ticker
             tickers.forEach((tickerName, index) => {
                 const priceData = dates.map((date, i) => ({
@@ -659,7 +659,7 @@
                     },
                 });
                 priceSeries.setData(priceData);
-                
+
                 // Store reference to primary series for cleanup
                 if (index === 0) {
                     window.priceSeries = priceSeries;
@@ -677,7 +677,7 @@
                     },
                 });
                 drawdownSeries.setData(drawdownData);
-                
+
                 // Store reference to primary series for cleanup
                 if (index === 0) {
                     window.drawdownSeries = drawdownSeries;
@@ -696,14 +696,14 @@
 
         function updateStats(data, ticker) {
             const tickers = Object.keys(data.price);
-            
+
             // Update price stats
             const priceStatsHtml = tickers.map(tickerName => {
                 const prices = data.price[tickerName].filter(p => p !== null);
                 const latest = prices[prices.length - 1];
                 const first = prices[0];
                 const change = ((latest - first) / first * 100);
-                
+
                 return `
                     <div class="stat-row">
                         <span class="stat-label">${tickerName}:</span>
@@ -713,14 +713,14 @@
                     </div>
                 `;
             }).join('');
-            
+
             document.getElementById('priceStats').innerHTML = priceStatsHtml;
 
             // Update drawdown stats
             const drawdownStatsHtml = tickers.map(tickerName => {
                 const drawdowns = data.drawdown[tickerName].filter(d => d !== null);
                 const maxDrawdown = Math.min(...drawdowns);
-                
+
                 return `
                     <div class="stat-row">
                         <span class="stat-label">${tickerName} Max DD:</span>
@@ -730,14 +730,14 @@
                     </div>
                 `;
             }).join('');
-            
+
             document.getElementById('drawdownStats').innerHTML = drawdownStatsHtml;
         }
 
         function showLoading(show) {
             const loadingEl = document.getElementById('loading');
             const chartsEl = document.querySelector('.chart-container');
-            
+
             if (show) {
                 loadingEl.style.display = 'block';
                 loadingEl.textContent = 'Loading data...';
@@ -789,9 +789,9 @@
         function convertToCSV(data) {
             const dates = data.dates;
             const tickers = Object.keys(data.price);
-            
+
             let csv = 'Date,' + tickers.map(t => `${t}_Price,${t}_Drawdown`).join(',') + '\n';
-            
+
             dates.forEach((date, i) => {
                 let row = date;
                 tickers.forEach(ticker => {
@@ -799,7 +799,7 @@
                 });
                 csv += row + '\n';
             });
-            
+
             return csv;
         }
 
@@ -878,11 +878,11 @@
             const tickerParam = urlParams.get('ticker');
             const sinceParam = urlParams.get('since');
             const preloadParam = urlParams.get('preload');
-            
+
             if (tickerParam) {
                 document.getElementById('ticker').value = tickerParam.toUpperCase();
             }
-            
+
             if (sinceParam) {
                 currentPeriod = sinceParam;
                 // Update active button
@@ -893,26 +893,26 @@
                     }
                 });
             }
-            
+
             // Start chart initialization immediately
             initChartsEarly();
-            
+
             // If preload parameter is set, preload that amount of data
             if (preloadParam) {
                 console.log(`🎯 CLI requested preload of ${preloadParam} data`);
                 const ticker = document.getElementById('ticker').value || 'SPY';
-                
+
                 // Start preloading the requested amount
                 fetchDataFromAPI(ticker, preloadParam, currentInterval)
                     .then(data => {
                         const masterCacheKey = `${ticker}_master_${currentInterval}`;
                         masterDataCache.set(masterCacheKey, data);
                         console.log(`✅ Preloaded ${preloadParam} data as requested by CLI`);
-                        
+
                         // Show the current period from the preloaded data
                         const trimmedData = trimDataToPeriod(data, currentPeriod);
                         currentData = trimmedData;
-                        
+
                         // Wait for charts to be ready
                         const waitForCharts = () => {
                             if (priceChart && drawdownChart) {
@@ -935,7 +935,7 @@
                 // Standard preloading
                 preloadDefaultData();
             }
-            
+
             // Wait for charts to be ready for any remaining initialization
             const checkAndFinalize = () => {
                 if (priceChart && drawdownChart && !currentData) {
@@ -952,7 +952,7 @@
                     });
                 }
             };
-            
+
             setTimeout(checkAndFinalize, 100);
         });
 
