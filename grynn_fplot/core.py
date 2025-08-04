@@ -9,7 +9,6 @@ except ImportError:
 import pandas as pd
 from sklearn.metrics import auc
 import numpy as np
-import os
 import json
 from pathlib import Path
 
@@ -22,6 +21,15 @@ def parse_start_date(date_or_offset) -> datetime | None:
             return None
         elif date_or_offset.upper() == "YTD":
             return datetime(datetime.now().year, 1, 1)
+        # Handle web interface short formats: 1m, 3m, 6m, 1y, 2y, 5y
+        elif re.match(r"^(\d+)(m|y)$", date_or_offset, re.IGNORECASE):
+            match = re.match(r"^(\d+)(m|y)$", date_or_offset, re.IGNORECASE)
+            num = int(match.group(1))
+            unit = match.group(2).lower()
+            if unit == "m":
+                return datetime.now() - relativedelta(months=num)
+            elif unit == "y":
+                return datetime.now() - relativedelta(years=num)
         elif re.match(
             r"^(?:last\s*)?(\d+)\s*(m|mos|mths|mo|months|days|d|yrs|yr|y|weeks?|wks?|wk)\s*(?:ago)?$",
             date_or_offset,

@@ -40,6 +40,7 @@ yfinance = { git = "https://github.com/ranaroussi/yfinance.git" }
 
 [dependency-groups]
 dev = [
+    "httpx>=0.28.1",
     "pre-commit>=4.1.0",
 ]
 

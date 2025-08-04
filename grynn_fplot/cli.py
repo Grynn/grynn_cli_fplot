@@ -1,4 +1,3 @@
-# %%
 import importlib.metadata
 import sys
 import tempfile
@@ -30,8 +29,8 @@ except importlib.metadata.PackageNotFoundError:
 
 
 @click.command()
-@click.option("--since", type=str, default=None)
-@click.option("--interval", type=str, default="1d")
+@click.option("--since", type=str, default=None, help="Start date for data (e.g., '1y', '6m', '2023-01-01')")
+@click.option("--interval", type=str, default="1d", help="Data interval (1d, 1wk, 1mo)")
 @click.argument("ticker", type=str, nargs=1, required=False)
 @click.option("--version", "-v", is_flag=True, help="Show version and exit")
 @click.option("--debug", is_flag=True, help="Enable debug mode")
@@ -39,7 +38,11 @@ except importlib.metadata.PackageNotFoundError:
 @click.option("--put", is_flag=True, help="List all available put options for the ticker")
 @click.option("--max", "max_expiry", type=str, default="6m", help="Maximum expiry time for options (e.g., '3m', '6m', '1y'). Default: 6m")
 @click.option("--all", "show_all", is_flag=True, help="Show all available expiries (overrides --max)")
-def display_plot(ticker, since, interval, version, debug, call, put, max_expiry, show_all):
+@click.option("--web", "-w", is_flag=True, help="Launch interactive web interface")
+@click.option("--port", type=int, default=8000, help="Port for web interface")
+@click.option("--host", type=str, default="127.0.0.1", help="Host for web interface")
+@click.option("--no-browser", is_flag=True, help="Don't automatically open browser")
+def display_plot(ticker, since, interval, version, debug, call, put, max_expiry, show_all, web, port, host, no_browser):
     """Generate a plot of the given ticker(s) or list options contracts.
     
     When --call or --put flags are used, lists available options contracts
@@ -74,10 +77,17 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
         print(f"fplot {__version__}")
         return
 
+    # Launch web interface if --web flag is used
+    if web:
+        launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
+        return
+
+    # CLI mode - require ticker
     if not ticker:
         click.echo(
             "Error: Missing argument 'TICKER'. Please provide a ticker symbol or symbols as a comma separated list."
         )
+        click.echo("Hint: Use --web or -w to launch the interactive web interface.")
         return
 
     # Handle options listing
@@ -101,6 +111,112 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
             print(option)
         return
 
+    # Continue with original CLI plotting logic
+    display_cli_plot(ticker, since, interval, debug)
+
+
+def launch_web_interface(ticker, since, interval, port, host, no_browser, debug):
+    """Launch the web interface using uvicorn"""
+    import subprocess
+    import time
+    import threading
+    
+    try:
+        # Import uvicorn here to avoid import issues
+        import uvicorn
+        from grynn_fplot.serve import app
+        
+        # Build the URL
+        url = f"http://{host}:{port}"
+        if ticker:
+            # If ticker is provided but no since parameter, use 5y for preloading
+            if since is None:
+                url += f"?ticker={ticker}&preload=5y"
+            else:
+                url += f"?ticker={ticker}&since={since}"
+        
+        print("🚀 Starting fplot web interface...")
+        print(f"📊 Server will be available at: {url}")
+        
+        if ticker:
+            print(f"📈 Pre-loading data for: {ticker}")
+        
+        # Start browser immediately if requested - don't wait for server
+        browser_opened = False
+        if not no_browser:
+            def open_browser_early():
+                nonlocal browser_opened
+                # Try to open browser with a shorter delay
+                time.sleep(0.5)
+                try:
+                    # Use npx open-in-browser for better cross-platform support
+                    subprocess.run(["npx", "open-in-browser", url], 
+                                 check=False, capture_output=True, timeout=10)
+                    browser_opened = True
+                    print(f"🌐 Opening {url} in your default browser...")
+                except subprocess.TimeoutExpired:
+                    print("⚠️  Browser opening timed out")
+                    print(f"📱 Please manually open: {url}")
+                except subprocess.CalledProcessError as e:
+                    print(f"⚠️  Browser opening failed: {e}")
+                    print(f"📱 Please manually open: {url}")
+                except FileNotFoundError:
+                    print("⚠️  npx not found, trying fallback...")
+                    # Fallback to Python webbrowser
+                    try:
+                        import webbrowser
+                        webbrowser.open(url)
+                        browser_opened = True
+                        print(f"🌐 Opened {url} using fallback method")
+                    except Exception as fallback_error:
+                        print(f"⚠️  Fallback browser opening failed: {fallback_error}")
+                        print(f"📱 Please manually open: {url}")
+                except Exception as e:
+                    print(f"⚠️  Could not open browser automatically: {e}")
+                    print(f"📱 Please manually open: {url}")
+            
+            # Start browser opening in parallel
+            threading.Thread(target=open_browser_early, daemon=True).start()
+        
+        # Configure uvicorn logging
+        log_level = "debug" if debug else "info"
+        
+        print("⚡ Starting server...")
+        if not no_browser and not browser_opened:
+            print("🌐 Browser will open automatically once server is ready...")
+        print("🛑 Press Ctrl+C to stop the server")
+        
+        # Create uvicorn config for faster startup
+        config = uvicorn.Config(
+            app,
+            host=host,
+            port=port,
+            log_level=log_level,
+            access_log=debug,
+            reload=False,  # Disable reload for faster startup
+            workers=1,     # Single worker for CLI mode
+            loop="asyncio"  # Use asyncio for better performance
+        )
+        
+        # Run the server
+        server = uvicorn.Server(config)
+        server.run()
+        
+    except ImportError as e:
+        print(f"❌ Error: Required web dependencies not available: {e}")
+        print("💡 Make sure FastAPI and uvicorn are installed")
+        print("🔧 Try: uv install fastapi uvicorn")
+        return
+    except KeyboardInterrupt:
+        print("\n🛑 Server stopped by user")
+        return
+    except Exception as e:
+        print(f"❌ Error starting web interface: {e}")
+        return
+
+
+def display_cli_plot(ticker, since, interval, debug):
+    """Display plot using matplotlib (original CLI functionality)"""
     since = parse_start_date(since)
 
     # Download and prepare data
