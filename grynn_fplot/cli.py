@@ -73,14 +73,14 @@ def display_plot(ticker, since, interval, version, debug):
 
     # Process data
 
-    # Handle edge case, where last row has data for only some tickers 
+    # Handle edge case, where last row has data for only some tickers
     # (if a ticker is delisted or using different exchanges with different timezones/trading days/calendars)
     # ONLY check last row for now
     last_row_has_missing_data = df.iloc[-1].isna().any()
     if last_row_has_missing_data:
         click.echo("Last row has missing data for some tickers. Dropping the row.")
         click.echo(tabulate(df.iloc[[-1]], headers="keys", tablefmt="pretty", showindex=False))
-        df = df.iloc[:-1]
+        df = df.iloc[:-1]  # drop the last row (this helps with plotting)
 
     df_normalized = normalize_prices(df)
     df_dd = calculate_drawdowns(df_normalized)
@@ -92,20 +92,24 @@ def display_plot(ticker, since, interval, version, debug):
     print(tabulate(df_auc, headers="keys", tablefmt="pretty", showindex=False))
     print("Higher values indicate greater drawdowns over time.\n")
 
-    # Calculate and display rolling, median 1-year return if time period >= 2 years
-    if df_days >= int(365.25 * 2):
+    # Calculate and display rolling, median 1-year return if time period >= 1.5 years
+    if df_days >= int(365.25 * 1.5):
         df_rolling_cagr = rolling_cagr(df, years=1).median()
         print("\n=== Rolling Median 1 yr Return ===")
+        print(df_rolling_cagr.to_string(float_format="{:.2%}".format))
+
+    # Calculate and display rolling, median 3-year return if time period >= 3.5 years
+    if df_days >= int(365.25 * 3.5):
+        df_rolling_cagr = rolling_cagr(df, years=3).median()
+        print("\n=== Rolling Median 3 yr Return ===")
         print(df_rolling_cagr.to_string(float_format="{:.2%}".format))
 
     # Calculate and display CAGR if time period >= 1 year
     if df_days >= 365:
         cagr_df = calculate_cagr(df_normalized)
         print("\n=== Compound Annual Growth Rate (CAGR) ===")
-        print(
-            tabulate(cagr_df, headers="keys", tablefmt="pretty", showindex=False, floatfmt=".2%")
-        )  # Format as percentage
-        print("CAGR represents annualized return over the period.\n")
+        print(tabulate(cagr_df, headers="keys", tablefmt="pretty", showindex=False, floatfmt=".2%"))
+        print(f"CAGR represents annualized return over the period {df.index[0]} to {df.index[-1]}, {df_days} days.\n")
 
     # Prepare for plotting
     auc_values = dict(zip(df_auc["Ticker"], df_auc["AUC"]))
