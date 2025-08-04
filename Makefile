@@ -3,8 +3,22 @@
 test: 
 	uv run pytest
 
-bump:
-	uvx bump-my-version bump patch
+bump: bump_patch
+
+bump_patch:
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Error: Working directory is not clean. Please commit or stash your changes first."; \
+		git status --short; \
+		exit 1; \
+	fi
+	@current_version=$$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'); \
+	new_version=$$(python3 -c "v='$$current_version'.split('.'); v[2]=str(int(v[2])+1); print('.'.join(v))"); \
+	sed -i '' "s/^version = \".*\"/version = \"$$new_version\"/" pyproject.toml; \
+	echo "Version bumped from $$current_version to $$new_version"; \
+	git add pyproject.toml; \
+	git commit -m "Bump version to $$new_version"; \
+	git tag "v$$new_version"; \
+	echo "Created git commit and tag v$$new_version"
 
 install:
 	uv tool install --upgrade-package "grynn_fplot" "grynn_fplot @ $$PWD"
