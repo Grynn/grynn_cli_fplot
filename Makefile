@@ -1,7 +1,10 @@
-.PHONY: install clean test lint format coverage dev
+.PHONY: install clean test lint format coverage dev bump_patch
 
 test: 
 	uv run pytest
+
+bump:
+	uvx bump-my-version bump patch
 
 install:
 	uv tool install --upgrade-package "grynn_fplot" "grynn_fplot @ $$PWD"
