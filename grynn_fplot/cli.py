@@ -19,6 +19,7 @@ from grynn_fplot.core import (
     download_ticker_data,
     normalize_prices,
     parse_start_date,
+    format_options_for_display,
 )
 
 try:
@@ -34,8 +35,16 @@ except importlib.metadata.PackageNotFoundError:
 @click.argument("ticker", type=str, nargs=1, required=False)
 @click.option("--version", "-v", is_flag=True, help="Show version and exit")
 @click.option("--debug", is_flag=True, help="Enable debug mode")
-def display_plot(ticker, since, interval, version, debug):
-    """Generate a plot of the given ticker(s)"""
+@click.option("--call", is_flag=True, help="List all available call options for the ticker")
+@click.option("--put", is_flag=True, help="List all available put options for the ticker")
+def display_plot(ticker, since, interval, version, debug, call, put):
+    """Generate a plot of the given ticker(s) or list options contracts.
+    
+    When --call or --put flags are used, lists available options contracts
+    in a format suitable for filtering with tools like fzf.
+    
+    Output format: TICKER STRIKE[C|P] DAYS_TO_EXPIRY (e.g., "AAPL 150C 30DTE")
+    """
     logger.remove()  # Remove default handlers
     logger.add(sys.stdout, level="DEBUG" if debug else "WARNING")
 
@@ -51,6 +60,27 @@ def display_plot(ticker, since, interval, version, debug):
         click.echo(
             "Error: Missing argument 'TICKER'. Please provide a ticker symbol or symbols as a comma separated list."
         )
+        return
+
+    # Handle options listing
+    if call:
+        options_list = format_options_for_display(ticker, 'calls')
+        if not options_list:
+            click.echo(f"No call options found for {ticker.upper()}")
+            return
+        
+        for option in options_list:
+            print(option)
+        return
+    
+    if put:
+        options_list = format_options_for_display(ticker, 'puts')
+        if not options_list:
+            click.echo(f"No put options found for {ticker.upper()}")
+            return
+        
+        for option in options_list:
+            print(option)
         return
 
     since = parse_start_date(since)

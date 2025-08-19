@@ -1,10 +1,16 @@
 import re
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-import yfinance
+try:
+    import yfinance
+except ImportError:
+    yfinance = None
 import pandas as pd
 from sklearn.metrics import auc
 import numpy as np
+import os
+import json
+from pathlib import Path
 
 
 def parse_start_date(date_or_offset) -> datetime | None:
@@ -68,6 +74,9 @@ def parse_interval(interval="1d"):
 
 def download_ticker_data(ticker, since, interval="1d"):
     """Download data from Yahoo Finance"""
+    if yfinance is None:
+        raise ImportError("yfinance package is required for ticker data functionality")
+        
     if isinstance(ticker, str):
         tickers = [t.strip() for t in ticker.split(",")]
     else:
@@ -149,3 +158,121 @@ def get_years(df):
     start_date = df.index[0]
     end_date = df.index[-1]
     return (end_date - start_date).days / 365.25
+
+
+def get_cache_dir():
+    """Get the cache directory for options data"""
+    cache_dir = Path.home() / ".cache" / "grynn_fplot"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
+
+
+def get_cached_options_data(ticker: str):
+    """Get cached options data for a ticker if it exists and is recent"""
+    cache_file = get_cache_dir() / f"{ticker.upper()}_options.json"
+    
+    if not cache_file.exists():
+        return None
+    
+    try:
+        with open(cache_file, 'r') as f:
+            cached_data = json.load(f)
+        
+        # Check if cache is less than 1 hour old
+        cache_time = datetime.fromisoformat(cached_data['timestamp'])
+        if (datetime.now() - cache_time).total_seconds() < 3600:
+            return cached_data['data']
+    except (json.JSONDecodeError, KeyError, ValueError):
+        pass
+    
+    return None
+
+
+def cache_options_data(ticker: str, data: dict):
+    """Cache options data for a ticker"""
+    cache_file = get_cache_dir() / f"{ticker.upper()}_options.json"
+    
+    cached_data = {
+        'timestamp': datetime.now().isoformat(),
+        'data': data
+    }
+    
+    try:
+        with open(cache_file, 'w') as f:
+            json.dump(cached_data, f)
+    except Exception:
+        pass  # Silently fail if caching doesn't work
+
+
+def fetch_options_data(ticker: str):
+    """Fetch options data for a ticker from yfinance with caching"""
+    if yfinance is None:
+        raise ImportError("yfinance package is required for options functionality")
+        
+    # Try to get cached data first
+    cached_data = get_cached_options_data(ticker)
+    if cached_data:
+        return cached_data
+    
+    try:
+        stock = yfinance.Ticker(ticker)
+        expiry_dates = stock.options
+        
+        if not expiry_dates:
+            return None
+        
+        options_data = {
+            'expiry_dates': expiry_dates,
+            'calls': {},
+            'puts': {}
+        }
+        
+        # Fetch call and put options for each expiry date
+        for expiry in expiry_dates:
+            try:
+                option_chain = stock.option_chain(expiry)
+                options_data['calls'][expiry] = option_chain.calls.to_dict('records')
+                options_data['puts'][expiry] = option_chain.puts.to_dict('records')
+            except Exception:
+                continue  # Skip this expiry if there's an error
+        
+        # Cache the data
+        cache_options_data(ticker, options_data)
+        return options_data
+        
+    except Exception:
+        return None
+
+
+def calculate_days_to_expiry(expiry_date_str: str) -> int:
+    """Calculate days to expiry from expiry date string"""
+    try:
+        expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d')
+        return (expiry_date - datetime.now()).days
+    except ValueError:
+        return 0
+
+
+def format_options_for_display(ticker: str, option_type: str = 'calls'):
+    """Format options data for fzf-friendly display"""
+    options_data = fetch_options_data(ticker)
+    
+    if not options_data:
+        return []
+    
+    formatted_options = []
+    
+    for expiry_date, options_list in options_data.get(option_type, {}).items():
+        dte = calculate_days_to_expiry(expiry_date)
+        
+        for option in options_list:
+            strike = option.get('strike', 0)
+            # Format as "TICKER STRIKEC/P XDTE"
+            option_type_letter = 'C' if option_type == 'calls' else 'P'
+            formatted_option = f"{ticker.upper()} {strike:.0f}{option_type_letter} {dte}DTE"
+            formatted_options.append(formatted_option)
+    
+    # Sort by strike price (extract from the formatted string)
+    formatted_options.sort(key=lambda x: float(x.split()[1].rstrip('CP')))
+    
+    return formatted_options
