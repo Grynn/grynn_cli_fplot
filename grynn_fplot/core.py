@@ -253,8 +253,14 @@ def calculate_days_to_expiry(expiry_date_str: str) -> int:
         return 0
 
 
-def format_options_for_display(ticker: str, option_type: str = 'calls'):
-    """Format options data for fzf-friendly display"""
+def format_options_for_display(ticker: str, option_type: str = 'calls', sort_by: str = 'strike'):
+    """Format options data for fzf-friendly display
+    
+    Args:
+        ticker: Stock ticker symbol
+        option_type: 'calls' or 'puts'
+        sort_by: 'strike', 'dte', or 'volume' (default: 'strike')
+    """
     options_data = fetch_options_data(ticker)
     
     if not options_data:
@@ -267,12 +273,26 @@ def format_options_for_display(ticker: str, option_type: str = 'calls'):
         
         for option in options_list:
             strike = option.get('strike', 0)
+            volume = option.get('volume', 0) or 0  # Handle None values
             # Format as "TICKER STRIKEC/P XDTE"
             option_type_letter = 'C' if option_type == 'calls' else 'P'
             formatted_option = f"{ticker.upper()} {strike:.0f}{option_type_letter} {dte}DTE"
-            formatted_options.append(formatted_option)
+            
+            # Store additional data for sorting
+            formatted_options.append({
+                'display': formatted_option,
+                'strike': strike,
+                'dte': dte,
+                'volume': volume
+            })
     
-    # Sort by strike price (extract from the formatted string)
-    formatted_options.sort(key=lambda x: float(x.split()[1].rstrip('CP')))
+    # Sort based on the specified criteria
+    if sort_by == 'strike':
+        formatted_options.sort(key=lambda x: x['strike'])
+    elif sort_by == 'dte':
+        formatted_options.sort(key=lambda x: x['dte'])
+    elif sort_by == 'volume':
+        formatted_options.sort(key=lambda x: x['volume'], reverse=True)
     
-    return formatted_options
+    # Return just the display strings
+    return [option['display'] for option in formatted_options]
