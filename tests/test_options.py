@@ -5,6 +5,10 @@ from grynn_fplot.core import (
     get_cache_dir,
     calculate_days_to_expiry,
     format_options_for_display,
+    parse_time_expression,
+    filter_expiry_dates,
+    calculate_cagr_to_breakeven,
+    calculate_put_annualized_return,
 )
 
 
@@ -34,13 +38,16 @@ class TestOptionsCore(unittest.TestCase):
         self.assertEqual(result, [])
 
     @patch('grynn_fplot.core.fetch_options_data')
-    def test_format_options_for_display_with_data(self, mock_fetch):
+    @patch('grynn_fplot.core.get_spot_price')  
+    def test_format_options_for_display_with_data(self, mock_spot_price, mock_fetch):
         """Test format_options_for_display with mock data"""
+        mock_spot_price.return_value = 150.0
         mock_data = {
+            'expiry_dates': ['2024-12-20'],
             'calls': {
                 '2024-12-20': [
-                    {'strike': 150.0},
-                    {'strike': 155.0},
+                    {'strike': 150.0, 'lastPrice': 5.0, 'volume': 100},
+                    {'strike': 155.0, 'lastPrice': 3.0, 'volume': 50},
                 ]
             }
         }
@@ -48,8 +55,67 @@ class TestOptionsCore(unittest.TestCase):
         
         with patch('grynn_fplot.core.calculate_days_to_expiry', return_value=30):
             result = format_options_for_display("AAPL", "calls")
-            self.assertIn("AAPL 150C 30DTE", result)
-            self.assertIn("AAPL 155C 30DTE", result)
+            self.assertTrue(any("AAPL 150C 30DTE ($5.00," in item for item in result))
+            self.assertTrue(any("AAPL 155C 30DTE ($3.00," in item for item in result))
+
+    def test_parse_time_expression(self):
+        """Test parsing of time expressions"""
+        self.assertEqual(parse_time_expression('3m'), 90)
+        self.assertEqual(parse_time_expression('6m'), 180)
+        self.assertEqual(parse_time_expression('1y'), 365)
+        self.assertEqual(parse_time_expression('2w'), 14)
+        self.assertEqual(parse_time_expression('30d'), 30)
+        self.assertEqual(parse_time_expression('invalid'), 180)  # Default fallback
+
+    def test_filter_expiry_dates(self):
+        """Test filtering of expiry dates"""
+        # Create test dates - some within range, some beyond
+        from datetime import timedelta
+        current_date = datetime.now()
+        
+        near_date = (current_date + timedelta(days=30)).strftime('%Y-%m-%d')
+        mid_date = (current_date + timedelta(days=100)).strftime('%Y-%m-%d')
+        far_date = (current_date + timedelta(days=200)).strftime('%Y-%m-%d')
+        
+        expiry_dates = [near_date, mid_date, far_date]
+        
+        # Test 90-day filter
+        filtered = filter_expiry_dates(expiry_dates, 90, False)
+        self.assertIn(near_date, filtered)
+        self.assertNotIn(far_date, filtered)
+        
+        # Test show_all flag
+        all_dates = filter_expiry_dates(expiry_dates, 90, True)
+        self.assertEqual(len(all_dates), 3)
+
+    def test_calculate_cagr_to_breakeven(self):
+        """Test CAGR to breakeven calculation for calls"""
+        spot_price = 150.0
+        strike = 155.0
+        option_price = 3.0
+        dte = 30
+        
+        cagr = calculate_cagr_to_breakeven(spot_price, strike, option_price, dte)
+        self.assertGreater(cagr, 0)
+        
+        # Test edge cases
+        self.assertEqual(calculate_cagr_to_breakeven(0, 100, 5, 30), 0.0)
+        self.assertEqual(calculate_cagr_to_breakeven(100, 110, 0, 30), 0.0)
+        self.assertEqual(calculate_cagr_to_breakeven(100, 110, 5, 0), 0.0)
+
+    def test_calculate_put_annualized_return(self):
+        """Test annualized return calculation for puts"""
+        spot_price = 150.0
+        option_price = 3.0
+        dte = 30
+        
+        annual_return = calculate_put_annualized_return(spot_price, option_price, dte)
+        self.assertGreater(annual_return, 0)
+        
+        # Test edge cases
+        self.assertEqual(calculate_put_annualized_return(150, 0, 30), 0.0)
+        self.assertEqual(calculate_put_annualized_return(150, 5, 0), 0.0)
+        self.assertEqual(calculate_put_annualized_return(150, 200, 30), 0.0)  # option price > spot
 
 
 if __name__ == "__main__":
