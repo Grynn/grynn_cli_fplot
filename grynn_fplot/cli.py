@@ -37,13 +37,31 @@ except importlib.metadata.PackageNotFoundError:
 @click.option("--debug", is_flag=True, help="Enable debug mode")
 @click.option("--call", is_flag=True, help="List all available call options for the ticker")
 @click.option("--put", is_flag=True, help="List all available put options for the ticker")
-def display_plot(ticker, since, interval, version, debug, call, put):
+@click.option("--max", "max_expiry", type=str, default="6m", help="Maximum expiry time for options (e.g., '3m', '6m', '1y'). Default: 6m")
+@click.option("--all", "show_all", is_flag=True, help="Show all available expiries (overrides --max)")
+def display_plot(ticker, since, interval, version, debug, call, put, max_expiry, show_all):
     """Generate a plot of the given ticker(s) or list options contracts.
     
     When --call or --put flags are used, lists available options contracts
     in a format suitable for filtering with tools like fzf.
     
-    Output format: TICKER STRIKE[C|P] DAYS_TO_EXPIRY (e.g., "AAPL 150C 30DTE")
+    Output format: TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric)
+    - For calls: return_metric is CAGR to breakeven
+    - For puts: return_metric is annualized return
+    
+    Examples:
+    \b
+    # List all AAPL call options (default: 6 months max)
+    fplot AAPL --call
+    
+    # List TSLA put options with 3 month max expiry
+    fplot TSLA --put --max 3m
+    
+    # List all available call options (no expiry limit)
+    fplot AAPL --call --all
+    
+    # Interactive filtering with fzf
+    fplot AAPL --call | fzf
     """
     logger.remove()  # Remove default handlers
     logger.add(sys.stdout, level="DEBUG" if debug else "WARNING")
@@ -64,7 +82,7 @@ def display_plot(ticker, since, interval, version, debug, call, put):
 
     # Handle options listing
     if call:
-        options_list = format_options_for_display(ticker, 'calls')
+        options_list = format_options_for_display(ticker, 'calls', max_expiry=max_expiry, show_all=show_all)
         if not options_list:
             click.echo(f"No call options found for {ticker.upper()}")
             return
@@ -74,7 +92,7 @@ def display_plot(ticker, since, interval, version, debug, call, put):
         return
     
     if put:
-        options_list = format_options_for_display(ticker, 'puts')
+        options_list = format_options_for_display(ticker, 'puts', max_expiry=max_expiry, show_all=show_all)
         if not options_list:
             click.echo(f"No put options found for {ticker.upper()}")
             return
