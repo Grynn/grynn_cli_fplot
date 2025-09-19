@@ -2,6 +2,7 @@ import re
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Union
+
 try:
     import yfinance
 except ImportError:
@@ -85,7 +86,7 @@ def download_ticker_data(ticker, since, interval="1d"):
     """Download data from Yahoo Finance"""
     if yfinance is None:
         raise ImportError("yfinance package is required for ticker data functionality")
-        
+
     if isinstance(ticker, str):
         tickers = [t.strip() for t in ticker.split(",")]
     else:
@@ -179,35 +180,32 @@ def get_cache_dir():
 def get_cached_options_data(ticker: str):
     """Get cached options data for a ticker if it exists and is recent"""
     cache_file = get_cache_dir() / f"{ticker.upper()}_options.json"
-    
+
     if not cache_file.exists():
         return None
-    
+
     try:
-        with open(cache_file, 'r') as f:
+        with open(cache_file, "r") as f:
             cached_data = json.load(f)
-        
+
         # Check if cache is less than 1 hour old
-        cache_time = datetime.fromisoformat(cached_data['timestamp'])
+        cache_time = datetime.fromisoformat(cached_data["timestamp"])
         if (datetime.now() - cache_time).total_seconds() < 3600:
-            return cached_data['data']
+            return cached_data["data"]
     except (json.JSONDecodeError, KeyError, ValueError):
         pass
-    
+
     return None
 
 
 def cache_options_data(ticker: str, data: dict):
     """Cache options data for a ticker"""
     cache_file = get_cache_dir() / f"{ticker.upper()}_options.json"
-    
-    cached_data = {
-        'timestamp': datetime.now().isoformat(),
-        'data': data
-    }
-    
+
+    cached_data = {"timestamp": datetime.now().isoformat(), "data": data}
+
     try:
-        with open(cache_file, 'w') as f:
+        with open(cache_file, "w") as f:
             json.dump(cached_data, f)
     except Exception:
         pass  # Silently fail if caching doesn't work
@@ -217,71 +215,67 @@ def fetch_options_data(ticker: str):
     """Fetch options data for a ticker from yfinance with caching"""
     if yfinance is None:
         raise ImportError("yfinance package is required for options functionality")
-        
+
     # Try to get cached data first
     cached_data = get_cached_options_data(ticker)
     if cached_data:
         return cached_data
-    
+
     try:
         stock = yfinance.Ticker(ticker)
         expiry_dates = stock.options
-        
+
         if not expiry_dates:
             return None
-        
-        options_data = {
-            'expiry_dates': expiry_dates,
-            'calls': {},
-            'puts': {}
-        }
-        
+
+        options_data = {"expiry_dates": expiry_dates, "calls": {}, "puts": {}}
+
         # Fetch call and put options for each expiry date
         for expiry in expiry_dates:
             try:
                 option_chain = stock.option_chain(expiry)
-                options_data['calls'][expiry] = option_chain.calls.to_dict('records')
-                options_data['puts'][expiry] = option_chain.puts.to_dict('records')
+                options_data["calls"][expiry] = option_chain.calls.to_dict("records")
+                options_data["puts"][expiry] = option_chain.puts.to_dict("records")
             except Exception:
                 continue  # Skip this expiry if there's an error
-        
+
         # Cache the data
         cache_options_data(ticker, options_data)
         return options_data
-        
+
     except Exception:
         return None
 
 
 def parse_time_expression(time_expr: str) -> int:
     """Parse time expression like '3m', '6m', '1y' and return days
-    
+
     Args:
         time_expr: Time expression (e.g., '3m', '6m', '1y', '2w', '30d')
-        
+
     Returns:
         Number of days
     """
     if not time_expr:
         return 180  # Default 6 months
-        
+
     time_expr = time_expr.lower().strip()
-    
+
     # Extract number and unit
-    match = re.match(r'^(\d+)([mdwy])$', time_expr)
+    match = re.match(r"^(\d+)([mdwy])$", time_expr)
     if not match:
         return 180  # Default 6 months if parsing fails
-        
+
     num = int(match.group(1))
     unit = match.group(2)
-    
-    if unit == 'd':
+
+    if unit == "d":
         return num
-    elif unit == 'w':
+    elif unit == "w":
         return num * 7
-    elif unit == 'm':
+    elif unit == "m":
         return num * 30  # Approximate month as 30 days
-    elif unit == 'y':
+    elif unit == "y":
         return num * 365
     else:
         return 180  # Default 6 months
@@ -291,12 +285,12 @@ def get_spot_price(ticker: str) -> float:
     """Get current spot price for a ticker"""
     if yfinance is None:
         return 100.0  # Fallback value for testing
-        
+
     try:
         stock = yfinance.Ticker(ticker)
         hist = stock.history(period="1d")
         if not hist.empty:
-            return float(hist['Close'].iloc[-1])
+            return float(hist["Close"].iloc[-1])
     except Exception:
         pass
     return 100.0  # Fallback value
@@ -304,49 +298,49 @@ def get_spot_price(ticker: str) -> float:
 
 def calculate_cagr_to_breakeven(spot_price: float, strike: float, option_price: float, dte: int) -> float:
     """Calculate CAGR to breakeven for call options
-    
+
     This is a simplified implementation. In the real implementation,
     this should use grynn_pylib's options module.
     """
     if dte <= 0 or option_price <= 0:
         return 0.0
-        
+
     # Breakeven price for calls = strike + premium
     breakeven_price = strike + option_price
-    
+
     # Calculate required return to reach breakeven
     if spot_price <= 0:
         return 0.0
-        
+
     total_return = (breakeven_price / spot_price) - 1
-    
+
     # Annualize the return
     years = dte / 365.0
     if years <= 0:
         return 0.0
-        
+
     cagr = (1 + total_return) ** (1 / years) - 1
     return cagr
 
 
 def calculate_put_annualized_return(spot_price: float, option_price: float, dte: int) -> float:
     """Calculate annualized return for put options
-    
+
     Formula: (price / (spot - price)) * 365 / dte
     """
     if dte <= 0 or option_price <= 0:
         return 0.0
-        
+
     denominator = spot_price - option_price
     if denominator <= 0:
         return 0.0
-        
+
     return (option_price / denominator) * 365 / dte
 
 
 def filter_expiry_dates(expiry_dates: list, max_days: int, show_all: bool = False) -> list:
     """Filter expiry dates based on maximum days from now
-    
+
     Args:
         expiry_dates: List of expiry date strings
         max_days: Maximum number of days from now
@@ -354,33 +348,37 @@ def filter_expiry_dates(expiry_dates: list, max_days: int, show_all: bool = Fals
     """
     if show_all:
         return expiry_dates
-        
+
     current_date = datetime.now()
     filtered_dates = []
-    
+
     for expiry_str in expiry_dates:
         try:
-            expiry_date = datetime.strptime(expiry_str, '%Y-%m-%d')
+            expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d")
             days_to_expiry = (expiry_date - current_date).days
-            
+
             if days_to_expiry <= max_days and days_to_expiry >= 0:
                 filtered_dates.append(expiry_str)
         except ValueError:
             continue  # Skip invalid date formats
-            
+
     return filtered_dates
+
+
+def calculate_days_to_expiry(expiry_date_str: str) -> int:
     """Calculate days to expiry from expiry date string"""
     try:
-        expiry_date = datetime.strptime(expiry_date_str, '%Y-%m-%d')
+        expiry_date = datetime.strptime(expiry_date_str, "%Y-%m-%d")
         return (expiry_date - datetime.now()).days
     except ValueError:
         return 0
 
 
-def format_options_for_display(ticker: str, option_type: str = 'calls', sort_by: str = 'strike', 
-                               max_expiry: str = "6m", show_all: bool = False):
+def format_options_for_display(
+    ticker: str, option_type: str = "calls", sort_by: str = "strike", max_expiry: str = "6m", show_all: bool = False
+):
     """Format options data for fzf-friendly display with enhanced information
-    
+
     Args:
         ticker: Stock ticker symbol
         option_type: 'calls' or 'puts'
@@ -389,65 +387,59 @@ def format_options_for_display(ticker: str, option_type: str = 'calls', sort_by:
         show_all: Show all available expiries (overrides max_expiry)
     """
     options_data = fetch_options_data(ticker)
-    
+
     if not options_data:
         return []
-    
+
     # Get spot price for return calculations
     spot_price = get_spot_price(ticker)
-    
+
     # Filter expiry dates based on max_expiry
     max_days = parse_time_expression(max_expiry)
-    filtered_expiry_dates = filter_expiry_dates(
-        options_data.get('expiry_dates', []), 
-        max_days, 
-        show_all
-    )
-    
+    filtered_expiry_dates = filter_expiry_dates(options_data.get("expiry_dates", []), max_days, show_all)
+
     formatted_options = []
-    
+
     for expiry_date in filtered_expiry_dates:
         if expiry_date not in options_data.get(option_type, {}):
             continue
-            
+
         options_list = options_data[option_type][expiry_date]
         dte = calculate_days_to_expiry(expiry_date)
-        
+
         for option in options_list:
-            strike = option.get('strike', 0)
-            volume = option.get('volume', 0) or 0  # Handle None values
-            last_price = option.get('lastPrice', 0) or 0
-            
+            strike = option.get("strike", 0)
+            volume = option.get("volume", 0) or 0  # Handle None values
+            last_price = option.get("lastPrice", 0) or 0
+
             # Calculate return metric based on option type
-            if option_type == 'calls' and last_price > 0:
+            if option_type == "calls" and last_price > 0:
                 return_metric = calculate_cagr_to_breakeven(spot_price, strike, last_price, dte)
                 return_str = f"{return_metric:.2%}"
-            elif option_type == 'puts' and last_price > 0:
+            elif option_type == "puts" and last_price > 0:
                 return_metric = calculate_put_annualized_return(spot_price, last_price, dte)
                 return_str = f"{return_metric:.2%}"
             else:
                 return_str = "N/A"
-            
+
             # Format as "TICKER STRIKEC/P XDTE (price, return)"
-            option_type_letter = 'C' if option_type == 'calls' else 'P'
-            formatted_option = f"{ticker.upper()} {strike:.0f}{option_type_letter} {dte}DTE (${last_price:.2f}, {return_str})"
-            
+            option_type_letter = "C" if option_type == "calls" else "P"
+            formatted_option = (
+                f"{ticker.upper()} {strike:.0f}{option_type_letter} {dte}DTE (${last_price:.2f}, {return_str})"
+            )
+
             # Store additional data for sorting
-            formatted_options.append({
-                'display': formatted_option,
-                'strike': strike,
-                'dte': dte,
-                'volume': volume,
-                'price': last_price
-            })
-    
+            formatted_options.append(
+                {"display": formatted_option, "strike": strike, "dte": dte, "volume": volume, "price": last_price}
+            )
+
     # Sort based on the specified criteria
-    if sort_by == 'strike':
-        formatted_options.sort(key=lambda x: x['strike'])
-    elif sort_by == 'dte':
-        formatted_options.sort(key=lambda x: x['dte'])
-    elif sort_by == 'volume':
-        formatted_options.sort(key=lambda x: x['volume'], reverse=True)
-    
+    if sort_by == "strike":
+        formatted_options.sort(key=lambda x: x["strike"])
+    elif sort_by == "dte":
+        formatted_options.sort(key=lambda x: x["dte"])
+    elif sort_by == "volume":
+        formatted_options.sort(key=lambda x: x["volume"], reverse=True)
+
     # Return just the display strings
-    return [option['display'] for option in formatted_options]
+    return [option["display"] for option in formatted_options]
