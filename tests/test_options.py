@@ -43,9 +43,9 @@ class TestOptionsCore(unittest.TestCase):
         """Test format_options_for_display with mock data"""
         mock_spot_price.return_value = 150.0
         mock_data = {
-            "expiry_dates": ["2024-12-20"],
+            "expiry_dates": ["2025-12-20"],
             "calls": {
-                "2024-12-20": [
+                "2025-12-20": [
                     {"strike": 150.0, "lastPrice": 5.0, "volume": 100},
                     {"strike": 155.0, "lastPrice": 3.0, "volume": 50},
                 ]
