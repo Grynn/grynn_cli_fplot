@@ -440,7 +440,7 @@ def evaluate_filter(filter_ast: dict, data: dict) -> bool:
 def format_options_for_display(
     ticker: str,
     option_type: str = "calls",
-    sort_by: str = "strike",
+    sort_by: str = "return",
     max_expiry: str = "6m",
     min_dte: int = None,
     show_all: bool = False,
@@ -451,7 +451,7 @@ def format_options_for_display(
     Args:
         ticker: Stock ticker symbol
         option_type: 'calls' or 'puts'
-        sort_by: 'strike', 'dte', or 'volume' (default: 'strike')
+        sort_by: 'strike', 'dte', 'volume', or 'return' (default: 'return')
         max_expiry: Maximum expiry time (e.g., '3m', '6m', '1y'). Default: '6m'
         min_dte: Minimum days to expiry (optional)
         show_all: Show all available expiries (overrides max_expiry)
@@ -546,7 +546,14 @@ def format_options_for_display(
 
             # Store additional data for sorting
             formatted_options.append(
-                {"display": formatted_option, "strike": strike, "dte": dte, "volume": volume, "price": last_price}
+                {
+                    "display": formatted_option,
+                    "strike": strike,
+                    "dte": dte,
+                    "volume": volume,
+                    "price": last_price,
+                    "return_metric": return_metric,
+                }
             )
 
     # Sort based on the specified criteria
@@ -556,6 +563,13 @@ def format_options_for_display(
         formatted_options.sort(key=lambda x: x["dte"])
     elif sort_by == "volume":
         formatted_options.sort(key=lambda x: x["volume"], reverse=True)
+    elif sort_by == "return":
+        # For calls: ascending (smallest to largest return)
+        # For puts: descending (largest to smallest return)
+        if option_type == "calls":
+            formatted_options.sort(key=lambda x: x["return_metric"])
+        else:  # puts
+            formatted_options.sort(key=lambda x: x["return_metric"], reverse=True)
 
     # Return just the display strings
     return [option["display"] for option in formatted_options]
