@@ -136,6 +136,33 @@ class TestEvaluateFilter(unittest.TestCase):
         data = {"dte": 30}
         self.assertFalse(evaluate_filter(filter_ast, data))
 
+    def test_none_value_handling(self):
+        """Test handling of None values in data"""
+        # None should not match any comparison except != None
+        filter_ast = {"key": "return", "op": ">", "value": 0}
+        data = {"return": None}
+        self.assertFalse(evaluate_filter(filter_ast, data))
+
+        # None with >= operator
+        filter_ast = {"key": "return", "op": ">=", "value": 0}
+        data = {"return": None}
+        self.assertFalse(evaluate_filter(filter_ast, data))
+
+        # None with == operator
+        filter_ast = {"key": "return", "op": "==", "value": None}
+        data = {"return": None}
+        self.assertTrue(evaluate_filter(filter_ast, data))
+
+        # None with != operator
+        filter_ast = {"key": "return", "op": "!=", "value": None}
+        data = {"return": None}
+        self.assertFalse(evaluate_filter(filter_ast, data))
+
+        # Non-None with != operator
+        filter_ast = {"key": "return", "op": "!=", "value": None}
+        data = {"return": 0.5}
+        self.assertTrue(evaluate_filter(filter_ast, data))
+
     def test_invalid_logical_operator(self):
         """Test invalid logical operator returns False"""
         filter_ast = {"op": "XOR", "children": [{"key": "dte", "op": ">", "value": 10}]}

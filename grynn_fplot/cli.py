@@ -96,11 +96,11 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
     parsed_filter = None
     if filter_expr:
         try:
-            from grynn_fplot.filter_parser import parse_filter
+            from grynn_fplot.filter_parser import parse_filter, FilterParseError
             parsed_filter = parse_filter(filter_expr)
             if debug:
                 logger.debug(f"Parsed filter: {parsed_filter}")
-        except Exception as e:
+        except FilterParseError as e:
             click.echo(f"Error: Invalid filter expression: {e}")
             click.echo("Filter syntax: Use comma (,) for AND, plus (+) for OR")
             click.echo("Examples: 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100'")

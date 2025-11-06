@@ -396,6 +396,16 @@ def evaluate_filter(filter_ast: dict, data: dict) -> bool:
 
         data_value = data[key]
 
+        # Handle None values (e.g., unavailable return metrics)
+        if data_value is None:
+            if op == "==":
+                return value is None
+            elif op == "!=":
+                return value is not None
+            else:
+                # None doesn't match other comparisons (>, <, >=, <=)
+                return False
+
         # Evaluate comparison
         if op == ">":
             return data_value > value
@@ -494,7 +504,7 @@ def format_options_for_display(
                 "dte": dte,
                 "volume": volume,
                 "price": last_price,
-                "return": return_metric if return_metric is not None else 0,  # Use 0 for filtering if None
+                "return": return_metric,  # Keep None if unavailable
                 "spot": spot_price,
             }
 

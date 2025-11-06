@@ -79,7 +79,8 @@ def parse_time_value(value_str: str) -> float:
     total_hours = 0.0
 
     # Pattern to match time components like 2d, 15h, 30m, etc.
-    # Matches integers or decimals: 2d, 2.5d, 15h, etc.
+    # Matches integers or decimals: 2d, 2.5d, 15h, 1.25h, etc.
+    # Pattern breakdown: \d+ = one or more digits, (?:\.\d+)? = optional decimal part
     pattern = r"(\d+(?:\.\d+)?)([dhms])"
     matches = re.findall(pattern, value_str)
 
