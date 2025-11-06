@@ -495,8 +495,10 @@ def format_options_for_display(
                 return_metric = calculate_put_annualized_return(spot_price, last_price, dte)
                 return_str = f"{return_metric:.2%}"
             else:
+                # No valid price for calculation - display N/A and set metric to None
+                # None values are handled specially in filter evaluation (see evaluate_filter)
                 return_str = "N/A"
-                return_metric = None  # Use None for unavailable return metrics
+                return_metric = None
 
             # Create option data dict for filtering
             option_data = {
@@ -504,7 +506,7 @@ def format_options_for_display(
                 "dte": dte,
                 "volume": volume,
                 "price": last_price,
-                "return": return_metric,  # Keep None if unavailable
+                "return": return_metric,  # May be None if calculation unavailable
                 "spot": spot_price,
             }
 
