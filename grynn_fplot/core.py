@@ -486,7 +486,7 @@ def format_options_for_display(
                 return_str = f"{return_metric:.2%}"
             else:
                 return_str = "N/A"
-                return_metric = 0
+                return_metric = None  # Use None for unavailable return metrics
 
             # Create option data dict for filtering
             option_data = {
@@ -494,7 +494,7 @@ def format_options_for_display(
                 "dte": dte,
                 "volume": volume,
                 "price": last_price,
-                "return": return_metric,
+                "return": return_metric if return_metric is not None else 0,  # Use 0 for filtering if None
                 "spot": spot_price,
             }
 

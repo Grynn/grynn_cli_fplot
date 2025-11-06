@@ -24,6 +24,11 @@ class TestTimeValueParsing(unittest.TestCase):
         self.assertEqual(parse_time_value("1h"), 1.0)
         self.assertEqual(parse_time_value("24h"), 24.0)
 
+    def test_parse_decimal_time(self):
+        """Test parsing decimal time values"""
+        self.assertEqual(parse_time_value("2.5d"), 60.0)  # 2.5 days = 60 hours
+        self.assertEqual(parse_time_value("1.5h"), 1.5)  # 1.5 hours
+
     def test_parse_combined_time(self):
         """Test parsing combined time units"""
         self.assertEqual(parse_time_value("2d15h"), 63.0)  # 48 + 15
