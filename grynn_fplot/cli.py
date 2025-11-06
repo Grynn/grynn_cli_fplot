@@ -37,12 +37,14 @@ except importlib.metadata.PackageNotFoundError:
 @click.option("--call", is_flag=True, help="List all available call options for the ticker")
 @click.option("--put", is_flag=True, help="List all available put options for the ticker")
 @click.option("--max", "max_expiry", type=str, default="6m", help="Maximum expiry time for options (e.g., '3m', '6m', '1y'). Default: 6m")
+@click.option("--min-dte", type=int, default=None, help="Minimum days to expiry for options filtering")
 @click.option("--all", "show_all", is_flag=True, help="Show all available expiries (overrides --max)")
+@click.option("--filter", "filter_expr", type=str, default=None, help="Filter expression (e.g., 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100')")
 @click.option("--web", "-w", is_flag=True, help="Launch interactive web interface")
 @click.option("--port", type=int, default=8000, help="Port for web interface")
 @click.option("--host", type=str, default="127.0.0.1", help="Host for web interface")
 @click.option("--no-browser", is_flag=True, help="Don't automatically open browser")
-def display_plot(ticker, since, interval, version, debug, call, put, max_expiry, show_all, web, port, host, no_browser):
+def display_plot(ticker, since, interval, version, debug, call, put, max_expiry, min_dte, show_all, filter_expr, web, port, host, no_browser):
     """Generate a plot of the given ticker(s) or list options contracts.
     
     When --call or --put flags are used, lists available options contracts
@@ -90,9 +92,25 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
         click.echo("Hint: Use --web or -w to launch the interactive web interface.")
         return
 
+    # Validate filter expression if provided
+    parsed_filter = None
+    if filter_expr:
+        try:
+            from grynn_fplot.filter_parser import parse_filter
+            parsed_filter = parse_filter(filter_expr)
+            if debug:
+                logger.debug(f"Parsed filter: {parsed_filter}")
+        except Exception as e:
+            click.echo(f"Error: Invalid filter expression: {e}")
+            click.echo("Filter syntax: Use comma (,) for AND, plus (+) for OR")
+            click.echo("Examples: 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100'")
+            return
+
     # Handle options listing
     if call:
-        options_list = format_options_for_display(ticker, 'calls', max_expiry=max_expiry, show_all=show_all)
+        options_list = format_options_for_display(
+            ticker, 'calls', max_expiry=max_expiry, min_dte=min_dte, show_all=show_all, filter_ast=parsed_filter
+        )
         if not options_list:
             click.echo(f"No call options found for {ticker.upper()}")
             return
@@ -102,7 +120,9 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
         return
     
     if put:
-        options_list = format_options_for_display(ticker, 'puts', max_expiry=max_expiry, show_all=show_all)
+        options_list = format_options_for_display(
+            ticker, 'puts', max_expiry=max_expiry, min_dte=min_dte, show_all=show_all, filter_ast=parsed_filter
+        )
         if not options_list:
             click.echo(f"No put options found for {ticker.upper()}")
             return

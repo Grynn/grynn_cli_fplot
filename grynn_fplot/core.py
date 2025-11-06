@@ -374,8 +374,67 @@ def calculate_days_to_expiry(expiry_date_str: str) -> int:
         return 0
 
 
+def evaluate_filter(filter_ast: dict, data: dict) -> bool:
+    """Evaluate a filter AST against data.
+
+    Args:
+        filter_ast: Parsed filter AST (dict with 'key'/'op'/'value' or 'op'/'children')
+        data: Dictionary with data to filter (e.g., {'dte': 30, 'strike': 100})
+
+    Returns:
+        True if data passes the filter, False otherwise
+    """
+    if "key" in filter_ast:
+        # Simple filter node
+        key = filter_ast["key"]
+        op = filter_ast["op"]
+        value = filter_ast["value"]
+
+        # Get the data value
+        if key not in data:
+            return False
+
+        data_value = data[key]
+
+        # Evaluate comparison
+        if op == ">":
+            return data_value > value
+        elif op == "<":
+            return data_value < value
+        elif op == ">=":
+            return data_value >= value
+        elif op == "<=":
+            return data_value <= value
+        elif op == "==":
+            return data_value == value
+        elif op == "!=":
+            return data_value != value
+        else:
+            return False
+
+    elif "op" in filter_ast and "children" in filter_ast:
+        # Logical node
+        op = filter_ast["op"]
+        children = filter_ast["children"]
+
+        if op == "AND":
+            return all(evaluate_filter(child, data) for child in children)
+        elif op == "OR":
+            return any(evaluate_filter(child, data) for child in children)
+        else:
+            return False
+
+    return False
+
+
 def format_options_for_display(
-    ticker: str, option_type: str = "calls", sort_by: str = "strike", max_expiry: str = "6m", show_all: bool = False
+    ticker: str,
+    option_type: str = "calls",
+    sort_by: str = "strike",
+    max_expiry: str = "6m",
+    min_dte: int = None,
+    show_all: bool = False,
+    filter_ast: dict = None,
 ):
     """Format options data for fzf-friendly display with enhanced information
 
@@ -384,7 +443,9 @@ def format_options_for_display(
         option_type: 'calls' or 'puts'
         sort_by: 'strike', 'dte', or 'volume' (default: 'strike')
         max_expiry: Maximum expiry time (e.g., '3m', '6m', '1y'). Default: '6m'
+        min_dte: Minimum days to expiry (optional)
         show_all: Show all available expiries (overrides max_expiry)
+        filter_ast: Parsed filter AST for advanced filtering (optional)
     """
     options_data = fetch_options_data(ticker)
 
@@ -407,6 +468,10 @@ def format_options_for_display(
         options_list = options_data[option_type][expiry_date]
         dte = calculate_days_to_expiry(expiry_date)
 
+        # Apply min_dte filter
+        if min_dte is not None and dte < min_dte:
+            continue
+
         for option in options_list:
             strike = option.get("strike", 0)
             volume = option.get("volume", 0) or 0  # Handle None values
@@ -421,6 +486,21 @@ def format_options_for_display(
                 return_str = f"{return_metric:.2%}"
             else:
                 return_str = "N/A"
+                return_metric = 0
+
+            # Create option data dict for filtering
+            option_data = {
+                "strike": strike,
+                "dte": dte,
+                "volume": volume,
+                "price": last_price,
+                "return": return_metric,
+                "spot": spot_price,
+            }
+
+            # Apply filter_ast if provided
+            if filter_ast and not evaluate_filter(filter_ast, option_data):
+                continue
 
             # Format as "TICKER STRIKEC/P XDTE (price, return)"
             option_type_letter = "C" if option_type == "calls" else "P"
