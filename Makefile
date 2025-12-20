@@ -1,4 +1,4 @@
-.PHONY: install clean test lint format coverage dev bump bump_patch pre-commit pre-commit-install build publish
+.PHONY: install clean test lint format coverage dev bump pre-commit pre-commit-install build publish
 
 test:
 	uv run pytest
@@ -9,21 +9,23 @@ pre-commit: dev
 pre-commit-install:
 	uvx pre-commit install
 
-bump: bump_patch
-
-bump_patch:
+work-tree-is-clean:
+	@# Check if the working directory is clean
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Error: Working directory is not clean. Please commit or stash your changes first."; \
 		git status --short; \
 		exit 1; \
+	else \
+		echo "Working directory is clean."; \
 	fi
-	@current_version=$$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/'); \
-	new_version=$$(python3 -c "v='$$current_version'.split('.'); v[2]=str(int(v[2])+1); print('.'.join(v))"); \
-	sed -i '' "s/^version = \".*\"/version = \"$$new_version\"/" pyproject.toml; \
-	echo "Version bumped from $$current_version to $$new_version"; \
-	git add pyproject.toml; \
-	git commit -m "Bump version to $$new_version"; \
-	git tag "v$$new_version"; \
+
+bump: test pre-commit-install work-tree-is-clean
+	@# 1. Bump version using uv
+	@uv version --bump patch
+	@# 2. Commit changes (work tree was clean before, so only version files changed)
+	@new_version=$$(uv version --short) && \
+	git commit -am "Bump version => v$$new_version" && \
+	git tag "v$$new_version" && \
 	echo "Created git commit and tag v$$new_version"
 
 install:
