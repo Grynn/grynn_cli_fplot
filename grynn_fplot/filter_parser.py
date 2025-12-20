@@ -26,6 +26,39 @@ from typing import Any, Dict, List, Union
 from dataclasses import dataclass
 
 
+# Registry of available filter fields with descriptions
+FILTER_FIELDS = {
+    "dte": {"description": "Days to expiry", "type": "integer", "example": "dte>150"},
+    "volume": {"description": "Option trading volume", "type": "integer", "example": "volume>100"},
+    "price": {"description": "Last traded price", "type": "float", "example": "price<5.0"},
+    "return": {
+        "description": "Return metric (CAGR for calls, annualized return for puts)",
+        "type": "float",
+        "aliases": ["ret", "ar"],
+        "example": "return>0.15",
+    },
+    "ret": {"description": "Alias for 'return'", "type": "float", "alias_of": "return", "example": "ret>0.15"},
+    "ar": {
+        "description": "Alias for 'return' (annualized return)",
+        "type": "float",
+        "alias_of": "return",
+        "example": "ar>0.15",
+    },
+    "strike_pct": {
+        "description": "Strike percentage relative to spot price (positive = above spot, negative = below spot)",
+        "type": "float",
+        "aliases": ["sp"],
+        "example": "strike_pct>5",
+    },
+    "sp": {"description": "Alias for 'strike_pct'", "type": "float", "alias_of": "strike_pct", "example": "sp>5"},
+    "lt_days": {
+        "description": "Days since last trade (useful for filtering stale/illiquid options)",
+        "type": "integer",
+        "example": "lt_days<7",
+    },
+}
+
+
 @dataclass
 class FilterNode:
     """Represents a single filter condition"""
@@ -451,3 +484,82 @@ def filter_to_string(filter_dict: Dict[str, Any]) -> str:
         return f"({separator.join(children_strs)})"
     else:
         raise ValueError(f"Invalid filter dictionary: {filter_dict}")
+
+
+def get_filter_help() -> str:
+    """Generate formatted help text for available filter fields.
+
+    Returns:
+        Formatted help text describing all filter fields, operators, and syntax
+    """
+    help_lines = []
+
+    # Header
+    help_lines.append("Filter Expression Reference")
+    help_lines.append("=" * 50)
+    help_lines.append("")
+
+    # Available Fields
+    help_lines.append("Available Filter Fields:")
+    help_lines.append("-" * 50)
+
+    # Group main fields (exclude aliases)
+    main_fields = {k: v for k, v in FILTER_FIELDS.items() if "alias_of" not in v}
+
+    for field_name in sorted(main_fields.keys()):
+        field_info = main_fields[field_name]
+        help_lines.append(f"\n  {field_name}")
+        help_lines.append(f"    {field_info['description']}")
+        help_lines.append(f"    Type: {field_info['type']}")
+
+        # Show aliases if any
+        if "aliases" in field_info:
+            aliases_str = ", ".join(field_info["aliases"])
+            help_lines.append(f"    Aliases: {aliases_str}")
+
+        help_lines.append(f"    Example: {field_info['example']}")
+
+    # Operators
+    help_lines.append("\n")
+    help_lines.append("Comparison Operators:")
+    help_lines.append("-" * 50)
+    help_lines.append("  >   Greater than")
+    help_lines.append("  <   Less than")
+    help_lines.append("  >=  Greater than or equal")
+    help_lines.append("  <=  Less than or equal")
+    help_lines.append("  =   Equal (also ==)")
+    help_lines.append("  !=  Not equal")
+
+    # Logical Operators
+    help_lines.append("\n")
+    help_lines.append("Logical Operators:")
+    help_lines.append("-" * 50)
+    help_lines.append("  ,   AND - all conditions must be true")
+    help_lines.append("  +   OR  - at least one condition must be true")
+    help_lines.append("  ()  Parentheses for grouping")
+
+    # Time Value Formats
+    help_lines.append("\n")
+    help_lines.append("Time Value Formats:")
+    help_lines.append("-" * 50)
+    help_lines.append("  DTE-style (returns days): 1y, 6m, 2w, 30d")
+    help_lines.append("  Duration (returns hours): 2d15h, 30m, 1h")
+    help_lines.append("  Plain integers: 5, 150, 300")
+
+    # Examples
+    help_lines.append("\n")
+    help_lines.append("Example Filters:")
+    help_lines.append("-" * 50)
+    help_lines.append("  dte>150")
+    help_lines.append("    Options with more than 150 days to expiry")
+    help_lines.append("")
+    help_lines.append("  dte>150, lt_days<7")
+    help_lines.append("    Options with DTE > 150 AND traded in last 7 days")
+    help_lines.append("")
+    help_lines.append("  (dte>300 + dte<30), volume>100")
+    help_lines.append("    Options with (DTE > 300 OR DTE < 30) AND volume > 100")
+    help_lines.append("")
+    help_lines.append("  return>0.20, sp>5, sp<15")
+    help_lines.append("    Options with return > 20%, strike 5-15% above spot")
+
+    return "\n".join(help_lines)

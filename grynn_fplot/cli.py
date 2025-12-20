@@ -52,6 +52,7 @@ except importlib.metadata.PackageNotFoundError:
     default=None,
     help="Filter expression (e.g., 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100')",
 )
+@click.option("--filter-help", is_flag=True, help="Show help for filter expressions and exit")
 @click.option("--web", "-w", is_flag=True, help="Launch interactive web interface")
 @click.option("--port", type=int, default=8000, help="Port for web interface")
 @click.option("--host", type=str, default="127.0.0.1", help="Host for web interface")
@@ -68,6 +69,7 @@ def display_plot(
     min_dte,
     show_all,
     filter_expr,
+    filter_help,
     web,
     port,
     host,
@@ -105,6 +107,13 @@ def display_plot(
     # Process arguments
     if version:
         print(f"fplot {__version__}")
+        return
+
+    # Show filter help if requested
+    if filter_help:
+        from grynn_fplot.filter_parser import get_filter_help
+
+        print(get_filter_help())
         return
 
     # Launch web interface if --web flag is used

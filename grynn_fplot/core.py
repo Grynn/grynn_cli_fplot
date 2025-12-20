@@ -486,19 +486,25 @@ def format_options_for_display(
             strike = option.get("strike", 0)
             volume = option.get("volume", 0) or 0  # Handle None values
             last_price = option.get("lastPrice", 0) or 0
-            
+
             # Get last trade date and calculate days since last trade
             last_trade_date = option.get("lastTradeDate", None)
             lt_days = None
             if last_trade_date:
                 try:
-                    from datetime import datetime
+                    from datetime import datetime, timezone
+
                     # lastTradeDate can be a timestamp or datetime
                     if isinstance(last_trade_date, (int, float)):
                         last_trade_dt = datetime.fromtimestamp(last_trade_date)
                     else:
                         last_trade_dt = last_trade_date
-                    lt_days = (datetime.now() - last_trade_dt).days
+                    # Convert both to timezone-aware UTC for comparison
+                    now_utc = datetime.now(timezone.utc)
+                    if last_trade_dt.tzinfo is None:
+                        # If last_trade_dt is naive, assume UTC
+                        last_trade_dt = last_trade_dt.replace(tzinfo=timezone.utc)
+                    lt_days = (now_utc - last_trade_dt).days
                 except Exception:
                     lt_days = None
 
