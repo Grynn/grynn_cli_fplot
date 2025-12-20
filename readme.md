@@ -1,14 +1,34 @@
-# Display comparative stock price history
+# fplot - Financial Plotting & Options Analysis CLI
 
-## Development
-
-For development, install the package in editable mode with `make dev`
+A command-line tool for plotting comparative stock price history and analyzing options contracts.
 
 ## Installation
 
-`make install` installs fplot using `uv tool install .` making it available across the system.
+### From PyPI
 
-Still in development, so not yet available on PyPI. Have to use make install instead of `uv tool install grynn_fplot`
+```shell
+pip install grynn-fplot
+```
+
+Or with uv:
+
+```shell
+uv tool install grynn-fplot
+```
+
+### From Source
+
+For development, install the package in editable mode:
+
+```shell
+make dev
+```
+
+Or install locally:
+
+```shell
+make install  # Uses uv tool install .
+```
 
 ## Usage
 
@@ -31,8 +51,8 @@ fplot <ticker> --call                  # List call options (default: 6 months ma
 fplot <ticker> --put                   # List put options (default: 6 months max)
 fplot <ticker> --call --max 3m         # List calls with 3 month max expiry
 fplot <ticker> --put --all             # List all available put options
-fplot <ticker> --call --min-dte 300    # List long-dated calls (min 300 days)
-fplot <ticker> --call --filter "dte>300"  # Filter using expressions
+fplot <ticker> --call --min-dte 1y     # List long-dated calls (min 1 year)
+fplot <ticker> --call --filter "dte>1y"  # Filter using time expressions
 ```
 
 Examples:
@@ -40,8 +60,10 @@ Examples:
 - `fplot AAPL --call`
 - `fplot TSLA --put --max 3m`
 - `fplot AAPL --call --all`
-- `fplot AAPL --call --min-dte 300 --all`  # Long-dated calls
+- `fplot AAPL --call --min-dte 1y`  # Long-dated calls (1+ year)
+- `fplot AAPL --call --min-dte 6m`  # Calls with 6+ months to expiry
 - `fplot AAPL --call --filter "dte>10, dte<50"`  # 10-50 days to expiry
+- `fplot AAPL --call --filter "dte>1y"`  # Options with 1+ year to expiry
 
 The options output includes pricing and return metrics:
 ```
@@ -58,8 +80,10 @@ Format: `TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric)`
 - `--max <time>`: Filter to show only options expiring within the specified time
   - Examples: `3m` (3 months), `6m` (6 months), `1y` (1 year), `2w` (2 weeks), `30d` (30 days)
   - Default: `6m` (6 months)
-- `--min-dte <days>`: Minimum days to expiry (useful for long-dated options)
-  - Example: `--min-dte 300` shows only options with 300+ days to expiry
+- `--min-dte <time>`: Minimum days to expiry (useful for long-dated options)
+  - Accepts plain days or time expressions: `300`, `1y`, `1.5y`, `6m`, `2w`
+  - Examples: `--min-dte 1y` (1+ year), `--min-dte 6m` (6+ months)
+  - Note: Using `--min-dte` automatically enables `--all` behavior
 - `--all`: Show all available expiries (overrides `--max`)
 
 **Advanced Filtering with `--filter`:**
@@ -91,8 +115,11 @@ The `--filter` option supports complex filter expressions with logical operators
   - `--filter "ar>50"` - Annualized return > 50%
 
 - **Time Values:**
-  - Time expressions like `2d15h`, `30m`, `1d` are supported
-  - Units: `d` (days), `h` (hours), `m` (minutes), `s` (seconds)
-  - Example: `--filter "lt_days<=7"` filters for options traded in the last week
+  - DTE-style expressions: `1y` (365 days), `6m` (180 days), `2w` (14 days)
+  - Duration expressions: `2d15h`, `30m`, `1d` (converted to hours for duration fields)
+  - Examples:
+    - `--filter "dte>1y"` - Options with more than 1 year to expiry
+    - `--filter "dte>6m"` - Options with more than 6 months to expiry
+    - `--filter "lt_days<=7"` - Options traded in the last week
 
 Options data is cached for 1 hour to improve performance and reduce API calls.

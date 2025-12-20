@@ -5,7 +5,7 @@ Filters support logical operators (AND/OR) and comparison operators.
 
 Syntax:
 - Comma (`,`) represents AND operation
-- Plus (`+`) represents OR operation  
+- Plus (`+`) represents OR operation
 - Comparison operators: `>`, `<`, `>=`, `<=`, `=`, `!=`
 - Parentheses for grouping: `(expr1 + expr2), expr3`
 
@@ -57,6 +57,47 @@ class FilterParseError(Exception):
     pass
 
 
+def parse_dte_value(value_str: str) -> int:
+    """Parse DTE-style time expressions like '1y', '1.5y', '6m', '2w', '30d' into days.
+
+    Supported units:
+    - y: years (365 days)
+    - m: months (30 days)
+    - w: weeks (7 days)
+    - d: days
+
+    Args:
+        value_str: Time string like "1y", "1.5y", "6m", "2w", "30d"
+
+    Returns:
+        Total time in days (integer, rounded)
+
+    Raises:
+        FilterParseError: If the time format is invalid
+    """
+    value_str = value_str.lower().strip()
+
+    # Pattern to match DTE-style expressions: number (with optional decimal) followed by y/m/w/d
+    match = re.match(r"^(\d+(?:\.\d+)?)([ymwd])$", value_str)
+
+    if not match:
+        raise FilterParseError(f"Invalid DTE time format: {value_str}")
+
+    num = float(match.group(1))
+    unit = match.group(2)
+
+    if unit == "y":
+        return int(num * 365)
+    elif unit == "m":
+        return int(num * 30)
+    elif unit == "w":
+        return int(num * 7)
+    elif unit == "d":
+        return int(num)
+    else:
+        raise FilterParseError(f"Unknown unit: {unit}")
+
+
 def parse_time_value(value_str: str) -> float:
     """Parse time values like '2d15h' into hours.
 
@@ -106,10 +147,11 @@ def parse_value(value_str: str) -> Any:
     """Parse a value string to appropriate type.
 
     Attempts to parse as:
-    1. Time value (if contains time units: d, h, m, s)
-    2. Integer
-    3. Float
-    4. String (fallback)
+    1. DTE-style time value (1y, 6m, 2w, 30d) - returns days as integer
+    2. Duration time value (2d15h, 30m, etc.) - returns hours as float
+    3. Integer
+    4. Float
+    5. String (fallback)
 
     Args:
         value_str: String representation of value
@@ -119,7 +161,18 @@ def parse_value(value_str: str) -> Any:
     """
     value_str = value_str.strip()
 
-    # Check for time values (e.g., "2d15h", "30m")
+    # Check for DTE-style time values (e.g., "1y", "1.5y", "6m", "2w")
+    # These are simple expressions: number (with optional decimal) + single unit, returning days
+    # Note: 'd' is excluded here to preserve backward compatibility with duration parsing (1d = 24h)
+    # For day-based filtering, users can use plain integers (e.g., 'dte>30')
+    if re.match(r"^\d+(?:\.\d+)?[ymw]$", value_str.lower()):
+        try:
+            return parse_dte_value(value_str)
+        except FilterParseError:
+            pass  # Fall through to other parsers
+
+    # Check for duration time values (e.g., "2d15h", "30m")
+    # These can be compound expressions, returning hours
     if re.search(r"\d+[dhms]", value_str.lower()):
         try:
             return parse_time_value(value_str)

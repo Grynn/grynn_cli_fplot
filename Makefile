@@ -1,4 +1,4 @@
-.PHONY: install clean test lint format coverage dev bump_patch pre-commit pre-commit-install
+.PHONY: install clean test lint format coverage dev bump bump_patch pre-commit pre-commit-install build publish
 
 test:
 	uv run pytest
@@ -7,7 +7,9 @@ pre-commit: dev
 	uvx pre-commit run --all-files
 
 pre-commit-install:
-	uvx pre-commit installbump: bump_patch
+	uvx pre-commit install
+
+bump: bump_patch
 
 bump_patch:
 	@if [ -n "$$(git status --porcelain)" ]; then \
@@ -56,3 +58,11 @@ clean:
 	rm -rf ./.venv
 	rm -rf .coverage
 	rm -rf htmlcov
+
+build: clean
+	uv build
+
+publish: build
+	@echo "Publishing to PyPI..."
+	@echo "Note: For CI/CD, use GitHub Actions with trusted publishing instead."
+	uv publish

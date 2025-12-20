@@ -36,35 +36,63 @@ except importlib.metadata.PackageNotFoundError:
 @click.option("--debug", is_flag=True, help="Enable debug mode")
 @click.option("--call", is_flag=True, help="List all available call options for the ticker")
 @click.option("--put", is_flag=True, help="List all available put options for the ticker")
-@click.option("--max", "max_expiry", type=str, default="6m", help="Maximum expiry time for options (e.g., '3m', '6m', '1y'). Default: 6m")
-@click.option("--min-dte", type=int, default=None, help="Minimum days to expiry for options filtering")
+@click.option(
+    "--max",
+    "max_expiry",
+    type=str,
+    default="6m",
+    help="Maximum expiry time for options (e.g., '3m', '6m', '1y'). Default: 6m",
+)
+@click.option("--min-dte", type=str, default=None, help="Minimum days to expiry (e.g., '30', '1y', '6m', '2w')")
 @click.option("--all", "show_all", is_flag=True, help="Show all available expiries (overrides --max)")
-@click.option("--filter", "filter_expr", type=str, default=None, help="Filter expression (e.g., 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100')")
+@click.option(
+    "--filter",
+    "filter_expr",
+    type=str,
+    default=None,
+    help="Filter expression (e.g., 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100')",
+)
 @click.option("--web", "-w", is_flag=True, help="Launch interactive web interface")
 @click.option("--port", type=int, default=8000, help="Port for web interface")
 @click.option("--host", type=str, default="127.0.0.1", help="Host for web interface")
 @click.option("--no-browser", is_flag=True, help="Don't automatically open browser")
-def display_plot(ticker, since, interval, version, debug, call, put, max_expiry, min_dte, show_all, filter_expr, web, port, host, no_browser):
+def display_plot(
+    ticker,
+    since,
+    interval,
+    version,
+    debug,
+    call,
+    put,
+    max_expiry,
+    min_dte,
+    show_all,
+    filter_expr,
+    web,
+    port,
+    host,
+    no_browser,
+):
     """Generate a plot of the given ticker(s) or list options contracts.
-    
+
     When --call or --put flags are used, lists available options contracts
     in a format suitable for filtering with tools like fzf.
-    
+
     Output format: TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric)
     - For calls: return_metric is CAGR to breakeven
     - For puts: return_metric is annualized return
-    
+
     Examples:
     \b
     # List all AAPL call options (default: 6 months max)
     fplot AAPL --call
-    
+
     # List TSLA put options with 3 month max expiry
     fplot TSLA --put --max 3m
-    
+
     # List all available call options (no expiry limit)
     fplot AAPL --call --all
-    
+
     # Interactive filtering with fzf
     fplot AAPL --call | fzf
     """
@@ -97,6 +125,7 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
     if filter_expr:
         try:
             from grynn_fplot.filter_parser import parse_filter, FilterParseError
+
             parsed_filter = parse_filter(filter_expr)
             if debug:
                 logger.debug(f"Parsed filter: {parsed_filter}")
@@ -106,13 +135,32 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
             click.echo("Examples: 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100'")
             return
 
-    # When --filter is specified, don't use default values for --max unless explicitly set or --all is used
+    # Parse min_dte if provided (supports formats like '30', '1y', '6m', '2w')
+    parsed_min_dte = None
+    if min_dte:
+        try:
+            # Try to parse as integer first
+            parsed_min_dte = int(min_dte)
+        except ValueError:
+            # Try to parse as time expression (1y, 6m, 2w, 30d)
+            try:
+                from grynn_fplot.filter_parser import parse_dte_value, FilterParseError
+
+                parsed_min_dte = parse_dte_value(min_dte)
+                if debug:
+                    logger.debug(f"Parsed min_dte '{min_dte}' to {parsed_min_dte} days")
+            except FilterParseError:
+                click.echo(f"Error: Invalid min-dte value: '{min_dte}'")
+                click.echo("Expected format: integer days or time expression (e.g., '30', '1y', '6m', '2w')")
+                return
+
+    # When --filter or --min-dte is specified, don't use default values for --max unless explicitly set or --all is used
     # This allows filters to work on all options without artificial date limits
     use_show_all = show_all
     use_max_expiry = max_expiry
-    if filter_expr and not show_all:
+    if (filter_expr or parsed_min_dte) and not show_all:
         # Check if max_expiry was explicitly set by the user (not just the default)
-        # Since we can't easily detect if a default was used, we'll treat filter as implying --all behavior
+        # Since we can't easily detect if a default was used, we'll treat filter/min_dte as implying --all behavior
         # unless max is explicitly different from default or --all is already set
         use_show_all = True
         use_max_expiry = None  # Will be ignored when show_all is True
@@ -120,24 +168,34 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
     # Handle options listing
     if call:
         options_list = format_options_for_display(
-            ticker, 'calls', max_expiry=use_max_expiry, min_dte=min_dte, show_all=use_show_all, filter_ast=parsed_filter
+            ticker,
+            "calls",
+            max_expiry=use_max_expiry,
+            min_dte=parsed_min_dte,
+            show_all=use_show_all,
+            filter_ast=parsed_filter,
         )
         if not options_list:
             click.echo(f"No call options found for {ticker.upper()}")
             return
-        
+
         for option in options_list:
             print(option)
         return
-    
+
     if put:
         options_list = format_options_for_display(
-            ticker, 'puts', max_expiry=use_max_expiry, min_dte=min_dte, show_all=use_show_all, filter_ast=parsed_filter
+            ticker,
+            "puts",
+            max_expiry=use_max_expiry,
+            min_dte=parsed_min_dte,
+            show_all=use_show_all,
+            filter_ast=parsed_filter,
         )
         if not options_list:
             click.echo(f"No put options found for {ticker.upper()}")
             return
-        
+
         for option in options_list:
             print(option)
         return

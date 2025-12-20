@@ -3,11 +3,23 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "grynn_fplot"
-version = "0.2.5"
-description = "CLI tool for plotting financial data"
+name = "grynn-fplot"
+version = "0.3.0"
+description = "CLI tool for plotting financial data and analyzing options"
 authors = [{ name = "Grynn", email = "vishal.doshi@gmail.com" }]
 requires-python = ">=3.12"
+readme = "README.md"
+license = { text = "MIT" }
+keywords = ["finance", "stocks", "options", "plotting", "cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
 dependencies = [
     "click ~= 8.1.7",
     "matplotlib >= 3.9.2",
@@ -25,6 +37,11 @@ dependencies = [
 
 [project.scripts]
 fplot = "grynn_fplot.cli:display_plot"
+
+[project.urls]
+Homepage = "https://github.com/Grynn/grynn_fplot"
+Repository = "https://github.com/Grynn/grynn_fplot"
+Issues = "https://github.com/Grynn/grynn_fplot/issues"
 
 [project.optional-dependencies]
 dev = [
