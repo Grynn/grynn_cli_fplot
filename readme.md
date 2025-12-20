@@ -1,5 +1,8 @@
 # fplot - Financial Plotting & Options Analysis CLI
 
+[![PyPI version](https://img.shields.io/pypi/v/grynn-fplot.svg)](https://pypi.org/project/grynn-fplot/)
+[![Python versions](https://img.shields.io/pypi/pyversions/grynn-fplot.svg)](https://pypi.org/project/grynn-fplot/)
+
 A command-line tool for plotting comparative stock price history and analyzing options contracts.
 
 ## Installation
