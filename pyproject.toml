@@ -1,65 +1,65 @@
 [build-system]
-requires = ["hatchling"]
 build-backend = "hatchling.build"
+requires = ["hatchling"]
 
 [project]
-name = "grynn-fplot"
-version = "0.3.1"
-description = "CLI tool for plotting financial data and analyzing options"
-authors = [{ name = "Grynn", email = "vishal.doshi@gmail.com" }]
-requires-python = ">=3.12"
-readme = "README.md"
-license = { text = "MIT" }
-keywords = ["finance", "stocks", "options", "plotting", "cli"]
+authors = [{name = "Grynn", email = "vishal.doshi@gmail.com"}]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Environment :: Console",
-    "Intended Audience :: Financial and Insurance Industry",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Topic :: Office/Business :: Financial :: Investment",
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Financial and Insurance Industry",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = [
-    "click ~= 8.1.7",
-    "matplotlib >= 3.9.2",
-    "dateparser ~= 1.2.0",
-    "mplcursors ~= 0.5.3",
-    "fastapi ~= 0.115.0",
-    "uvicorn ~= 0.32.0",
-    "scikit-learn >= 1.6.1",
-    "grynn-pylib",
-    "ipywidgets>=8.1.5",
-    "tabulate>=0.9.0",
-    "yfinance",
-    "pandas>=2.2.3",
+  "click ~= 8.1.7",
+  "matplotlib >= 3.9.2",
+  "dateparser ~= 1.2.0",
+  "mplcursors ~= 0.5.3",
+  "fastapi ~= 0.115.0",
+  "uvicorn ~= 0.32.0",
+  "scikit-learn >= 1.6.1",
+  "grynn-pylib",
+  "ipywidgets>=8.1.5",
+  "tabulate>=0.9.0",
+  "yfinance",
+  "pandas>=2.2.3",
 ]
+description = "CLI tool for plotting financial data and analyzing options"
+keywords = ["finance", "stocks", "options", "plotting", "cli"]
+license = {text = "MIT"}
+name = "grynn-fplot"
+readme = "README.md"
+requires-python = ">=3.12"
+version = "0.3.1"
 
 [project.scripts]
 fplot = "grynn_fplot.cli:display_plot"
 
 [project.urls]
-Homepage = "https://github.com/Grynn/grynn_fplot"
-Repository = "https://github.com/Grynn/grynn_fplot"
-Issues = "https://github.com/Grynn/grynn_fplot/issues"
+Homepage = "https://github.com/Grynn/grynn_cli_fplot"
+Issues = "https://github.com/Grynn/grynn_cli_fplot/issues"
+Repository = "https://github.com/Grynn/grynn_cli_fplot"
 
 [project.optional-dependencies]
 dev = [
-    "ipykernel>=6.29.5",
-    "ipython>=8.18.1",
-    "mypy>=1.14.1",
-    "pytest>=8.3.4",
-    "ruff>=0.9.2",
+  "ipykernel>=6.29.5",
+  "ipython>=8.18.1",
+  "mypy>=1.14.1",
+  "pytest>=8.3.4",
+  "ruff>=0.9.2",
 ]
 
 [tool.uv.sources]
-grynn-pylib = { git = "https://github.com/Grynn/grynn_pylib.git" }
-yfinance = { git = "https://github.com/ranaroussi/yfinance.git" }
+grynn-pylib = {git = "https://github.com/Grynn/grynn_pylib.git"}
+yfinance = {git = "https://github.com/ranaroussi/yfinance.git"}
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
-    "pre-commit>=4.1.0",
+  "httpx>=0.28.1",
+  "pre-commit>=4.1.0",
 ]
 
 [tool.ruff]
