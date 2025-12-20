@@ -41,13 +41,17 @@ class TestOptionsCore(unittest.TestCase):
     @patch("grynn_fplot.core.get_spot_price")
     def test_format_options_for_display_with_data(self, mock_spot_price, mock_fetch):
         """Test format_options_for_display with mock data"""
+        from datetime import datetime, timedelta
+        # Use a future date that won't expire
+        future_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
+        
         mock_spot_price.return_value = 150.0
         mock_data = {
-            "expiry_dates": ["2025-12-20"],
+            "expiry_dates": [future_date],
             "calls": {
-                "2025-12-20": [
-                    {"strike": 150.0, "lastPrice": 5.0, "volume": 100},
-                    {"strike": 155.0, "lastPrice": 3.0, "volume": 50},
+                future_date: [
+                    {"strike": 150.0, "lastPrice": 5.0, "volume": 100, "lastTradeDate": None},
+                    {"strike": 155.0, "lastPrice": 3.0, "volume": 50, "lastTradeDate": None},
                 ]
             },
         }

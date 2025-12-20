@@ -374,8 +374,77 @@ def calculate_days_to_expiry(expiry_date_str: str) -> int:
         return 0
 
 
+def evaluate_filter(filter_ast: dict, data: dict) -> bool:
+    """Evaluate a filter AST against data.
+
+    Args:
+        filter_ast: Parsed filter AST (dict with 'key'/'op'/'value' or 'op'/'children')
+        data: Dictionary with data to filter (e.g., {'dte': 30, 'strike': 100})
+
+    Returns:
+        True if data passes the filter, False otherwise
+    """
+    if "key" in filter_ast:
+        # Simple filter node
+        key = filter_ast["key"]
+        op = filter_ast["op"]
+        value = filter_ast["value"]
+
+        # Get the data value
+        if key not in data:
+            return False
+
+        data_value = data[key]
+
+        # Handle None values (e.g., unavailable return metrics)
+        if data_value is None:
+            if op == "==":
+                return value is None
+            elif op == "!=":
+                return value is not None
+            else:
+                # None doesn't match other comparisons (>, <, >=, <=)
+                return False
+
+        # Evaluate comparison
+        if op == ">":
+            return data_value > value
+        elif op == "<":
+            return data_value < value
+        elif op == ">=":
+            return data_value >= value
+        elif op == "<=":
+            return data_value <= value
+        elif op == "==":
+            return data_value == value
+        elif op == "!=":
+            return data_value != value
+        else:
+            return False
+
+    elif "op" in filter_ast and "children" in filter_ast:
+        # Logical node
+        op = filter_ast["op"]
+        children = filter_ast["children"]
+
+        if op == "AND":
+            return all(evaluate_filter(child, data) for child in children)
+        elif op == "OR":
+            return any(evaluate_filter(child, data) for child in children)
+        else:
+            return False
+
+    return False
+
+
 def format_options_for_display(
-    ticker: str, option_type: str = "calls", sort_by: str = "strike", max_expiry: str = "6m", show_all: bool = False
+    ticker: str,
+    option_type: str = "calls",
+    sort_by: str = "strike",
+    max_expiry: str = "6m",
+    min_dte: int = None,
+    show_all: bool = False,
+    filter_ast: dict = None,
 ):
     """Format options data for fzf-friendly display with enhanced information
 
@@ -384,7 +453,9 @@ def format_options_for_display(
         option_type: 'calls' or 'puts'
         sort_by: 'strike', 'dte', or 'volume' (default: 'strike')
         max_expiry: Maximum expiry time (e.g., '3m', '6m', '1y'). Default: '6m'
+        min_dte: Minimum days to expiry (optional)
         show_all: Show all available expiries (overrides max_expiry)
+        filter_ast: Parsed filter AST for advanced filtering (optional)
     """
     options_data = fetch_options_data(ticker)
 
@@ -407,10 +478,29 @@ def format_options_for_display(
         options_list = options_data[option_type][expiry_date]
         dte = calculate_days_to_expiry(expiry_date)
 
+        # Apply min_dte filter
+        if min_dte is not None and dte < min_dte:
+            continue
+
         for option in options_list:
             strike = option.get("strike", 0)
             volume = option.get("volume", 0) or 0  # Handle None values
             last_price = option.get("lastPrice", 0) or 0
+            
+            # Get last trade date and calculate days since last trade
+            last_trade_date = option.get("lastTradeDate", None)
+            lt_days = None
+            if last_trade_date:
+                try:
+                    from datetime import datetime
+                    # lastTradeDate can be a timestamp or datetime
+                    if isinstance(last_trade_date, (int, float)):
+                        last_trade_dt = datetime.fromtimestamp(last_trade_date)
+                    else:
+                        last_trade_dt = last_trade_date
+                    lt_days = (datetime.now() - last_trade_dt).days
+                except Exception:
+                    lt_days = None
 
             # Calculate return metric based on option type
             if option_type == "calls" and last_price > 0:
@@ -420,7 +510,33 @@ def format_options_for_display(
                 return_metric = calculate_put_annualized_return(spot_price, last_price, dte)
                 return_str = f"{return_metric:.2%}"
             else:
+                # No valid price for calculation - display N/A and set metric to None
+                # None values are handled specially in filter evaluation (see evaluate_filter)
                 return_str = "N/A"
+                return_metric = None
+
+            # Calculate strike percentage (% above/below spot)
+            strike_pct = None
+            if spot_price > 0 and strike > 0:
+                strike_pct = ((strike - spot_price) / spot_price) * 100
+
+            # Create option data dict for filtering
+            # Field aliases: ret/ar for return, sp for strike_pct, lt_days for last trade days
+            option_data = {
+                "dte": dte,
+                "volume": volume,
+                "price": last_price,
+                "return": return_metric,  # May be None if calculation unavailable
+                "ret": return_metric,  # Alias for return
+                "ar": return_metric,  # Alias for annualized return
+                "strike_pct": strike_pct,  # Percentage above/below spot
+                "sp": strike_pct,  # Alias for strike_pct
+                "lt_days": lt_days,  # Days since last trade
+            }
+
+            # Apply filter_ast if provided
+            if filter_ast and not evaluate_filter(filter_ast, option_data):
+                continue
 
             # Format as "TICKER STRIKEC/P XDTE (price, return)"
             option_type_letter = "C" if option_type == "calls" else "P"
