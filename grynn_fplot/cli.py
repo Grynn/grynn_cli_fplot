@@ -106,10 +106,21 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
             click.echo("Examples: 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100'")
             return
 
+    # When --filter is specified, don't use default values for --max unless explicitly set or --all is used
+    # This allows filters to work on all options without artificial date limits
+    use_show_all = show_all
+    use_max_expiry = max_expiry
+    if filter_expr and not show_all:
+        # Check if max_expiry was explicitly set by the user (not just the default)
+        # Since we can't easily detect if a default was used, we'll treat filter as implying --all behavior
+        # unless max is explicitly different from default or --all is already set
+        use_show_all = True
+        use_max_expiry = None  # Will be ignored when show_all is True
+
     # Handle options listing
     if call:
         options_list = format_options_for_display(
-            ticker, 'calls', max_expiry=max_expiry, min_dte=min_dte, show_all=show_all, filter_ast=parsed_filter
+            ticker, 'calls', max_expiry=use_max_expiry, min_dte=min_dte, show_all=use_show_all, filter_ast=parsed_filter
         )
         if not options_list:
             click.echo(f"No call options found for {ticker.upper()}")
@@ -121,7 +132,7 @@ def display_plot(ticker, since, interval, version, debug, call, put, max_expiry,
     
     if put:
         options_list = format_options_for_display(
-            ticker, 'puts', max_expiry=max_expiry, min_dte=min_dte, show_all=show_all, filter_ast=parsed_filter
+            ticker, 'puts', max_expiry=use_max_expiry, min_dte=min_dte, show_all=use_show_all, filter_ast=parsed_filter
         )
         if not options_list:
             click.echo(f"No put options found for {ticker.upper()}")

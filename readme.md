@@ -74,23 +74,25 @@ The `--filter` option supports complex filter expressions with logical operators
 
 - **Filter Fields:**
   - `dte`: Days to expiry
-  - `strike`: Strike price
   - `volume`: Option volume
   - `price`: Last price
-  - `return`: Return metric (CAGR for calls, annualized return for puts)
-  - `spot`: Current spot price
+  - `return`, `ret`, `ar`: Return metric (CAGR for calls, annualized return for puts) - all aliases work
+  - `strike_pct`, `sp`: Strike percentage above/below spot (positive = above spot, negative = below spot)
+  - `lt_days`: Days since last trade (useful for filtering stale options)
 
 - **Examples:**
   - `--filter "dte>300"` - Options with more than 300 days to expiry
   - `--filter "dte>10, dte<50"` - Options between 10-50 days (AND operation)
   - `--filter "dte<30 + dte>300"` - Short-term OR long-dated (OR operation)
-  - `--filter "strike>100, strike<200"` - Strike price between 100-200
-  - `--filter "(dte>300 + dte<30), strike>150"` - Complex nested filters
+  - `--filter "sp>5, sp<15"` - Strikes 5-15% above current spot price
+  - `--filter "(dte>300 + dte<30), sp>5"` - Complex nested filters
   - `--filter "volume>=100"` - High volume options
+  - `--filter "lt_days<=7"` - Options traded within last 7 days
+  - `--filter "ar>50"` - Annualized return > 50%
 
 - **Time Values:**
   - Time expressions like `2d15h`, `30m`, `1d` are supported
   - Units: `d` (days), `h` (hours), `m` (minutes), `s` (seconds)
-  - Example: `--filter "lt_days<=2d15h"` (if custom fields support time values)
+  - Example: `--filter "lt_days<=7"` filters for options traded in the last week
 
 Options data is cached for 1 hour to improve performance and reduce API calls.

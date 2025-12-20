@@ -50,11 +50,19 @@ Added two new CLI options:
 
 The following fields are available for filtering:
 - `dte`: Days to expiry (integer)
-- `strike`: Strike price (float)
 - `volume`: Option volume (integer)
 - `price`: Last price (float)
-- `return`: Return metric - CAGR for calls, annualized return for puts (float)
-- `spot`: Current spot price (float)
+- `return`, `ret`, `ar`: Return metric - CAGR for calls, annualized return for puts (float)
+  - All three aliases reference the same value
+- `strike_pct`, `sp`: Strike percentage above/below current spot price (float)
+  - Positive values mean strike is above spot (out of the money for calls)
+  - Negative values mean strike is below spot (in the money for calls)
+  - Example: `sp>5` filters for strikes >5% above spot
+- `lt_days`: Days since last trade (integer)
+  - Number of days between now and the last trade date
+  - Useful for filtering out stale/illiquid options
+
+**Note:** `strike` (absolute strike price) and `spot` (current spot price) are not available as filter fields. Use `strike_pct`/`sp` for strike-based filtering relative to current price.
 
 #### Time Values
 

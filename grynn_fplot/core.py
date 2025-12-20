@@ -486,6 +486,21 @@ def format_options_for_display(
             strike = option.get("strike", 0)
             volume = option.get("volume", 0) or 0  # Handle None values
             last_price = option.get("lastPrice", 0) or 0
+            
+            # Get last trade date and calculate days since last trade
+            last_trade_date = option.get("lastTradeDate", None)
+            lt_days = None
+            if last_trade_date:
+                try:
+                    from datetime import datetime
+                    # lastTradeDate can be a timestamp or datetime
+                    if isinstance(last_trade_date, (int, float)):
+                        last_trade_dt = datetime.fromtimestamp(last_trade_date)
+                    else:
+                        last_trade_dt = last_trade_date
+                    lt_days = (datetime.now() - last_trade_dt).days
+                except Exception:
+                    lt_days = None
 
             # Calculate return metric based on option type
             if option_type == "calls" and last_price > 0:
@@ -500,14 +515,23 @@ def format_options_for_display(
                 return_str = "N/A"
                 return_metric = None
 
+            # Calculate strike percentage (% above/below spot)
+            strike_pct = None
+            if spot_price > 0 and strike > 0:
+                strike_pct = ((strike - spot_price) / spot_price) * 100
+
             # Create option data dict for filtering
+            # Field aliases: ret/ar for return, sp for strike_pct, lt_days for last trade days
             option_data = {
-                "strike": strike,
                 "dte": dte,
                 "volume": volume,
                 "price": last_price,
                 "return": return_metric,  # May be None if calculation unavailable
-                "spot": spot_price,
+                "ret": return_metric,  # Alias for return
+                "ar": return_metric,  # Alias for annualized return
+                "strike_pct": strike_pct,  # Percentage above/below spot
+                "sp": strike_pct,  # Alias for strike_pct
+                "lt_days": lt_days,  # Days since last trade
             }
 
             # Apply filter_ast if provided
