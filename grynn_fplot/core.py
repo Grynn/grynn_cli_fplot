@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
-from typing import Union
+from typing import Union, List
 
 try:
     import yfinance
@@ -12,6 +12,54 @@ from sklearn.metrics import auc
 import numpy as np
 import json
 from pathlib import Path
+
+
+def parse_ticker_input(ticker_input: Union[str, List[str]]) -> List[str]:
+    """Parse ticker input supporting multiple formats.
+    
+    Supports:
+    - Single ticker: "AAPL"
+    - Comma-separated: "AAPL,TSLA" or "AAPL, TSLA"
+    - Space-separated: ["AAPL", "TSLA"] (from CLI args)
+    - Division operations: "AAPL/XLK"
+    - Mixed: ["AAPL", "AAPL/XLK", "TW.L"]
+    - Quoted strings with spaces/commas: "ABC, DEF" (preserved as single token by shell)
+    
+    Args:
+        ticker_input: Either a single string or list of strings from CLI arguments
+        
+    Returns:
+        List of ticker symbols or expressions (e.g., ["AAPL", "TSLA", "AAPL/XLK"])
+    """
+    if ticker_input is None:
+        return []
+    
+    # If it's already a list (from multiple CLI arguments), process each element
+    if isinstance(ticker_input, list):
+        tickers = []
+        for item in ticker_input:
+            # Each item might still contain commas or be a complex expression
+            if ',' in item:
+                # Split by comma and add each part
+                tickers.extend([t.strip() for t in item.split(',') if t.strip()])
+            else:
+                # Keep as-is (might be a division expression or simple ticker)
+                item = item.strip()
+                if item:
+                    tickers.append(item)
+        return tickers
+    
+    # If it's a single string, split by commas
+    if isinstance(ticker_input, str):
+        ticker_input = ticker_input.strip()
+        if not ticker_input:
+            return []
+        
+        # Split by comma and strip whitespace
+        tickers = [t.strip() for t in ticker_input.split(',') if t.strip()]
+        return tickers
+    
+    return []
 
 
 def parse_start_date(date_or_offset) -> datetime | None:
@@ -83,19 +131,45 @@ def parse_interval(interval="1d"):
 
 
 def download_ticker_data(ticker, since, interval="1d"):
-    """Download data from Yahoo Finance"""
+    """Download data from Yahoo Finance
+    
+    Supports:
+    - Single ticker: "AAPL"
+    - Comma-separated: "AAPL,TSLA"
+    - List of tickers: ["AAPL", "TSLA"]
+    - Division operations: "AAPL/XLK" or ["AAPL/XLK"]
+    
+    Division operations create a new column with the ratio of the two tickers.
+    """
     if yfinance is None:
         raise ImportError("yfinance package is required for ticker data functionality")
 
-    if isinstance(ticker, str):
-        tickers = [t.strip() for t in ticker.split(",")]
-    else:
-        tickers = ticker
-
-    tickers = set(tickers)
-    if len(tickers) == 1:
-        tickers.add("SPY")
-
+    # Parse ticker input
+    tickers = parse_ticker_input(ticker)
+    
+    # Separate division expressions from regular tickers
+    division_expressions = []
+    regular_tickers = []
+    
+    for t in tickers:
+        if '/' in t:
+            division_expressions.append(t)
+            # Extract the component tickers from the division expression
+            parts = t.split('/')
+            for part in parts:
+                part = part.strip()
+                if part:
+                    regular_tickers.append(part)
+        else:
+            regular_tickers.append(t)
+    
+    # Remove duplicates while preserving order
+    regular_tickers = list(dict.fromkeys(regular_tickers))
+    
+    # Add SPY if only one regular ticker (not counting division expressions)
+    if len(regular_tickers) == 1 and not division_expressions:
+        regular_tickers.append("SPY")
+    
     interval = parse_interval(interval)
 
     # Only pass start parameter if since is not None
@@ -103,9 +177,24 @@ def download_ticker_data(ticker, since, interval="1d"):
     if since is not None:
         kwargs["start"] = since
 
-    df = yfinance.download(tickers, **kwargs)["Adj Close"]
-    assert isinstance(df, pd.DataFrame), f"Expected DataFrame from yfinance.download for {tickers}"
-
+    # Download data for regular tickers
+    df = yfinance.download(regular_tickers, **kwargs)["Adj Close"]
+    assert isinstance(df, pd.DataFrame), f"Expected DataFrame from yfinance.download for {regular_tickers}"
+    
+    # Process division expressions
+    for expr in division_expressions:
+        parts = expr.split('/')
+        if len(parts) == 2:
+            numerator = parts[0].strip()
+            denominator = parts[1].strip()
+            
+            if numerator in df.columns and denominator in df.columns:
+                # Create new column with the division result
+                df[expr] = df[numerator] / df[denominator]
+            else:
+                # If one of the tickers is missing, log a warning but continue
+                print(f"Warning: Could not create division column '{expr}' - missing ticker data")
+    
     return df
 
 
