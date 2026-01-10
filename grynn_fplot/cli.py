@@ -57,6 +57,14 @@ except importlib.metadata.PackageNotFoundError:
 @click.option("--port", type=int, default=8000, help="Port for web interface")
 @click.option("--host", type=str, default="127.0.0.1", help="Host for web interface")
 @click.option("--no-browser", is_flag=True, help="Don't automatically open browser")
+# Calculator mode options
+@click.option("--calc", is_flag=True, help="Calculator mode: calculate metrics from broker data")
+@click.option("-s", "--spot", type=float, default=None, help="[Calc mode] Current stock price")
+@click.option("-k", "--strike", type=float, default=None, help="[Calc mode] Strike price")
+@click.option("-p", "--price", type=float, default=None, help="[Calc mode] Option price")
+@click.option("-d", "--dte", type=int, default=None, help="[Calc mode] Days to expiry")
+@click.option("--iv", type=float, default=None, help="[Calc mode] Implied volatility (decimal, e.g., 0.30)")
+@click.option("--delta", type=float, default=None, help="[Calc mode] Option delta from broker")
 def display_plot(
     ticker,
     since,
@@ -74,6 +82,13 @@ def display_plot(
     port,
     host,
     no_browser,
+    calc,
+    spot,
+    strike,
+    price,
+    dte,
+    iv,
+    delta,
 ):
     """Generate a plot of the given ticker(s) or list options contracts.
 
@@ -107,6 +122,12 @@ def display_plot(
     # Process arguments
     if version:
         print(f"fplot {__version__}")
+        return
+
+    # Calculator mode
+    if calc:
+        from grynn_fplot.calculator import run_calculator
+        run_calculator(spot, strike, price, dte, call, put, iv, delta)
         return
 
     # Show filter help if requested

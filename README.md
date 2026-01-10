@@ -35,6 +35,33 @@ make install  # Uses uv tool install .
 
 ## Usage
 
+### Options Calculator (Manual Broker Data)
+
+Calculate option metrics using accurate data from your broker with the `--calc` flag:
+
+```bash
+# Using implied volatility from broker
+fplot --calc -s 100 -k 110 -p 5.25 -d 35 --call --iv 0.35
+
+# Using delta directly from broker
+fplot --calc -s 100 -k 95 -p 3.50 -d 45 --put --delta -0.45
+```
+
+**Required Options:**
+- `--calc`: Enable calculator mode
+- `-s, --spot`: Current stock price
+- `-k, --strike`: Strike price
+- `-p, --price`: Option price
+- `-d, --dte`: Days to expiry
+- `--call` or `--put`: Option type
+- `--iv` or `--delta`: Either implied volatility (decimal) or delta from broker
+
+**Output includes:**
+- CAGR to breakeven (calls) or Annualized return (puts)
+- Delta (calculated or provided)
+- Leverage (Ω = Δ × S/O)
+- Efficiency (Leverage/CAGR ratio)
+
 ### Stock Plotting
 
 ```shell
