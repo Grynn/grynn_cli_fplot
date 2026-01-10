@@ -537,6 +537,8 @@ def format_options_for_display(
         show_all: Show all available expiries (overrides max_expiry)
         filter_ast: Parsed filter AST for advanced filtering (optional)
     """
+    from scipy import stats
+    
     options_data = fetch_options_data(ticker)
 
     if not options_data:
@@ -549,7 +551,8 @@ def format_options_for_display(
     max_days = parse_time_expression(max_expiry)
     filtered_expiry_dates = filter_expiry_dates(options_data.get("expiry_dates", []), max_days, show_all)
 
-    formatted_options = []
+    # First pass: collect all options with raw efficiency values
+    raw_options = []
 
     for expiry_date in filtered_expiry_dates:
         if expiry_date not in options_data.get(option_type, {}):
@@ -621,46 +624,83 @@ def format_options_for_display(
             if spot_price > 0 and strike > 0:
                 strike_pct = ((strike - spot_price) / spot_price) * 100
 
-            # Create option data dict for filtering
-            # Field aliases: ret/ar for return, sp for strike_pct, lt_days for last trade days, lev for leverage
-            option_data = {
+            # Calculate raw efficiency (leverage / CAGR)
+            # Will be converted to percentile in second pass
+            raw_efficiency = None
+            if leverage and leverage > 0 and return_metric and return_metric > 0:
+                raw_efficiency = leverage / return_metric
+
+            # Store option data for first pass
+            raw_options.append({
+                "ticker": ticker,
+                "strike": strike,
                 "dte": dte,
                 "volume": volume,
                 "price": last_price,
-                "return": return_metric,  # May be None if calculation unavailable
-                "ret": return_metric,  # Alias for return
-                "ar": return_metric,  # Alias for annualized return
-                "strike_pct": strike_pct,  # Percentage above/below spot
-                "sp": strike_pct,  # Alias for strike_pct
-                "lt_days": lt_days,  # Days since last trade
-                "leverage": leverage,  # Implied leverage
-                "lev": leverage,  # Alias for leverage
-            }
+                "return_metric": return_metric,
+                "return_str": return_str,
+                "leverage": leverage,
+                "strike_pct": strike_pct,
+                "lt_days": lt_days,
+                "raw_efficiency": raw_efficiency,
+                "option_type": option_type,
+            })
 
-            # Apply filter_ast if provided
-            if filter_ast and not evaluate_filter(filter_ast, option_data):
-                continue
-
-            # Format as "TICKER STRIKEC/P XDTE (price, return, leverage)"
-            option_type_letter = "C" if option_type == "calls" else "P"
-            leverage_str = f"{leverage:.1f}x" if leverage and leverage > 0 else "N/A"
-            formatted_option = (
-                f"{ticker.upper()} {strike:.0f}{option_type_letter} {dte}DTE (${last_price:.2f}, {return_str}, {leverage_str})"
-            )
-
-            # Store additional data for sorting
-            formatted_options.append(
-                {
-                    "display": formatted_option,
-                    "strike": strike,
-                    "dte": dte,
-                    "volume": volume,
-                    "price": last_price,
-                    "return_metric": return_metric,
-                    "leverage": leverage,
-                }
-            )
-
+    # Second pass: calculate efficiency percentiles
+    valid_efficiencies = [opt["raw_efficiency"] for opt in raw_options if opt["raw_efficiency"] is not None]
+    
+    # Build final formatted options with efficiency percentiles
+    formatted_options = []
+    for opt in raw_options:
+        # Calculate efficiency percentile (0-100)
+        efficiency = None
+        if opt["raw_efficiency"] is not None and len(valid_efficiencies) > 0:
+            efficiency = stats.percentileofscore(valid_efficiencies, opt["raw_efficiency"], kind='rank')
+        
+        # Create option data dict for filtering
+        # Field aliases: ret/ar for return, sp for strike_pct, lt_days for last trade days, lev for leverage, eff for efficiency
+        option_data = {
+            "dte": opt["dte"],
+            "volume": opt["volume"],
+            "price": opt["price"],
+            "return": opt["return_metric"],
+            "ret": opt["return_metric"],
+            "ar": opt["return_metric"],
+            "strike_pct": opt["strike_pct"],
+            "sp": opt["strike_pct"],
+            "lt_days": opt["lt_days"],
+            "leverage": opt["leverage"],
+            "lev": opt["leverage"],
+            "efficiency": efficiency,
+            "eff": efficiency,
+        }
+        
+        # Apply filter_ast if provided
+        if filter_ast and not evaluate_filter(filter_ast, option_data):
+            continue
+        
+        # Format display string
+        option_type_letter = "C" if opt["option_type"] == "calls" else "P"
+        leverage_str = f"{opt['leverage']:.1f}x" if opt['leverage'] and opt['leverage'] > 0 else "N/A"
+        efficiency_str = f"{efficiency:.0f}" if efficiency is not None else "N/A"
+        
+        formatted_option = (
+            f"{opt['ticker'].upper()} {opt['strike']:.0f}{option_type_letter} {opt['dte']}DTE "
+            f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str})"
+        )
+        
+        # Store for sorting
+        formatted_options.append({
+            "display": formatted_option,
+            "strike": opt["strike"],
+            "dte": opt["dte"],
+            "volume": opt["volume"],
+            "price": opt["price"],
+            "return_metric": opt["return_metric"],
+            "leverage": opt["leverage"],
+            "efficiency": efficiency,
+        })
+    
     # Sort based on the specified criteria
     if sort_by == "strike":
         formatted_options.sort(key=lambda x: x["strike"])
@@ -672,9 +712,12 @@ def format_options_for_display(
         # For calls: ascending (smallest to largest return)
         # For puts: descending (largest to smallest return)
         if option_type == "calls":
-            formatted_options.sort(key=lambda x: x["return_metric"])
+            formatted_options.sort(key=lambda x: x["return_metric"] if x["return_metric"] is not None else float('inf'))
         else:  # puts
-            formatted_options.sort(key=lambda x: x["return_metric"], reverse=True)
-
+            formatted_options.sort(key=lambda x: x["return_metric"] if x["return_metric"] is not None else float('-inf'), reverse=True)
+    elif sort_by == "efficiency":
+        # Sort by efficiency percentile (highest first)
+        formatted_options.sort(key=lambda x: x["efficiency"] if x["efficiency"] is not None else -1, reverse=True)
+    
     # Return just the display strings
     return [option["display"] for option in formatted_options]

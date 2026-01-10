@@ -68,14 +68,14 @@ Examples:
 - `fplot AAPL --call --filter "dte>10, dte<50"`  # 10-50 days to expiry
 - `fplot AAPL --call --filter "dte>1y"`  # Options with 1+ year to expiry
 
-The options output includes pricing, return metrics, and implied leverage:
+The options output includes pricing, return metrics, implied leverage, and efficiency:
 ```
-AAPL 225C 35DTE ($5.25, 18.5%, 19.0x)
-AAPL 230C 35DTE ($3.10, 25.2%, 32.3x)
-AAPL 235C 35DTE ($1.85, 35.1%, 54.1x)
+AAPL 225C 35DTE ($5.25, 18.5%, 19.0x, eff:45)
+AAPL 230C 35DTE ($3.10, 25.2%, 32.3x, eff:78)
+AAPL 235C 35DTE ($1.85, 35.1%, 54.1x, eff:92)
 ```
 
-Format: `TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric, leverage)`
+Format: `TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric, leverage, eff:percentile)`
 - For calls: return_metric is CAGR to breakeven
 - For puts: return_metric is annualized return
 - Leverage: Implied leverage (Ω = Δ × S/O) where Δ is Black-Scholes delta, S is spot price, O is option price
@@ -83,6 +83,10 @@ Format: `TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric, leverage)`
   - Shows "N/A" if implied volatility is not available
   - Shows the percentage change in option value for a 1% change in stock price
   - Example: 10x leverage means a 1% stock move results in ~10% option move
+- Efficiency: Percentile rank (0-100) of leverage/CAGR ratio
+  - Higher = better (high leverage with low required stock movement)
+  - 80+ = top 20% most efficient options
+  - Shows "N/A" if leverage or return unavailable
 
 **Expiry Filtering Options:**
 - `--max <time>`: Filter to show only options expiring within the specified time
@@ -112,6 +116,7 @@ The `--filter` option supports complex filter expressions with logical operators
   - `strike_pct`, `sp`: Strike percentage above/below spot (positive = above spot, negative = below spot)
   - `lt_days`: Days since last trade (useful for filtering stale options)
   - `leverage`, `lev`: Implied leverage (Ω = Δ × S/O, using Black-Scholes delta)
+  - `efficiency`, `eff`: Efficiency percentile (leverage/CAGR ratio, 0-100 scale)
 
 - **Examples:**
   - `--filter "dte>300"` - Options with more than 300 days to expiry
@@ -124,6 +129,8 @@ The `--filter` option supports complex filter expressions with logical operators
   - `--filter "ar>50"` - Annualized return > 50%
   - `--filter "leverage>10"` - High leverage options (10x or more)
   - `--filter "lev>5, lev<20"` - Moderate leverage options (5x-20x)
+  - `--filter "efficiency>80"` - Top 20% most efficient options
+  - `--filter "eff>60, dte<60"` - Above-average efficiency with <60 days to expiry
 
 - **Time Values:**
   - DTE-style expressions: `1y` (365 days), `6m` (180 days), `2w` (14 days)

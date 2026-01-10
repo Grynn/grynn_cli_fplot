@@ -63,6 +63,13 @@ FILTER_FIELDS = {
         "example": "leverage>5",
     },
     "lev": {"description": "Alias for 'leverage'", "type": "float", "alias_of": "leverage", "example": "lev>5"},
+    "efficiency": {
+        "description": "Efficiency percentile (leverage/CAGR, 0-100 scale)",
+        "type": "float",
+        "aliases": ["eff"],
+        "example": "efficiency>80",
+    },
+    "eff": {"description": "Alias for 'efficiency'", "type": "float", "alias_of": "efficiency", "example": "eff>80"},
 }
 
 
