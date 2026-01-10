@@ -31,7 +31,7 @@ except importlib.metadata.PackageNotFoundError:
 @click.command()
 @click.option("--since", type=str, default=None, help="Start date for data (e.g., '1y', '6m', '2023-01-01')")
 @click.option("--interval", type=str, default="1d", help="Data interval (1d, 1wk, 1mo)")
-@click.argument("ticker", type=str, nargs=1, required=False)
+@click.argument("ticker", type=str, nargs=-1, required=False)
 @click.option("--version", "-v", is_flag=True, help="Show version and exit")
 @click.option("--debug", is_flag=True, help="Enable debug mode")
 @click.option("--call", is_flag=True, help="List all available call options for the ticker")
@@ -86,6 +86,24 @@ def display_plot(
 
     Examples:
     \b
+    # Single ticker
+    fplot AAPL
+    
+    # Multiple tickers (space-separated)
+    fplot AAPL TSLA MSFT
+    
+    # Comma-separated tickers
+    fplot AAPL,TSLA
+    
+    # Division operations
+    fplot AAPL/XLK
+    
+    # Mixed inputs
+    fplot AAPL AAPL/XLK TW.L
+    
+    # Quoted strings with commas
+    fplot "AAPL, TSLA"
+    
     # List all AAPL call options (default: 6 months max)
     fplot AAPL --call
 
@@ -109,23 +127,33 @@ def display_plot(
         print(f"fplot {__version__}")
         return
 
-    # Show filter help if requested
+# Show filter help if requested
     if filter_help:
         from grynn_fplot.filter_parser import get_filter_help
 
         print(get_filter_help())
         return
 
+    # Convert ticker tuple to list (Click's variadic arguments return a tuple)
+    ticker_list = list(ticker) if ticker else []
     # Launch web interface if --web flag is used
     if web:
-        launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
+        # For web interface, join tickers back into a string
+        ticker_str = ','.join(ticker_list) if ticker_list else None
+        launch_web_interface(ticker_str, since, interval, port, host, no_browser, debug)
         return
 
     # CLI mode - require ticker
-    if not ticker:
+    if not ticker_list:
         click.echo(
-            "Error: Missing argument 'TICKER'. Please provide a ticker symbol or symbols as a comma separated list."
+            "Error: Missing argument 'TICKER'. Please provide ticker symbol(s)."
         )
+        click.echo("Examples:")
+        click.echo("  fplot AAPL")
+        click.echo("  fplot AAPL TSLA")
+        click.echo("  fplot AAPL,TSLA")
+        click.echo("  fplot AAPL/XLK")
+        click.echo('  fplot "AAPL, TSLA"')
         click.echo("Hint: Use --web or -w to launch the interactive web interface.")
         return
 
@@ -176,8 +204,10 @@ def display_plot(
 
     # Handle options listing
     if call:
+        # For options, use the first ticker only (options only work with single ticker)
+        ticker_for_options = ticker_list[0] if ticker_list else ""
         options_list = format_options_for_display(
-            ticker,
+            ticker_for_options,
             "calls",
             max_expiry=use_max_expiry,
             min_dte=parsed_min_dte,
@@ -185,7 +215,7 @@ def display_plot(
             filter_ast=parsed_filter,
         )
         if not options_list:
-            click.echo(f"No call options found for {ticker.upper()}")
+            click.echo(f"No call options found for {ticker_for_options.upper()}")
             return
 
         for option in options_list:
@@ -193,8 +223,10 @@ def display_plot(
         return
 
     if put:
+        # For options, use the first ticker only (options only work with single ticker)
+        ticker_for_options = ticker_list[0] if ticker_list else ""
         options_list = format_options_for_display(
-            ticker,
+            ticker_for_options,
             "puts",
             max_expiry=use_max_expiry,
             min_dte=parsed_min_dte,
@@ -202,7 +234,7 @@ def display_plot(
             filter_ast=parsed_filter,
         )
         if not options_list:
-            click.echo(f"No put options found for {ticker.upper()}")
+            click.echo(f"No put options found for {ticker_for_options.upper()}")
             return
 
         for option in options_list:
@@ -210,7 +242,7 @@ def display_plot(
         return
 
     # Continue with original CLI plotting logic
-    display_cli_plot(ticker, since, interval, debug)
+    display_cli_plot(ticker_list, since, interval, debug)
 
 
 def launch_web_interface(ticker, since, interval, port, host, no_browser, debug):
