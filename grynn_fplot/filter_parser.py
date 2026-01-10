@@ -56,6 +56,13 @@ FILTER_FIELDS = {
         "type": "integer",
         "example": "lt_days<7",
     },
+    "leverage": {
+        "description": "Implied leverage (Omega = Delta × spot_price / option_price)",
+        "type": "float",
+        "aliases": ["lev"],
+        "example": "leverage>5",
+    },
+    "lev": {"description": "Alias for 'leverage'", "type": "float", "alias_of": "leverage", "example": "lev>5"},
 }
 
 

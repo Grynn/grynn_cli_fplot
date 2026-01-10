@@ -338,6 +338,86 @@ def calculate_put_annualized_return(spot_price: float, option_price: float, dte:
     return (option_price / denominator) * 365 / dte
 
 
+def calculate_black_scholes_delta(spot_price: float, strike: float, time_to_expiry: float, 
+                                  risk_free_rate: float = 0.05, volatility: float = 0.30,
+                                  option_type: str = "call") -> float:
+    """Calculate Black-Scholes delta for an option
+    
+    Delta measures the rate of change of option price with respect to stock price.
+    
+    Args:
+        spot_price: Current stock price (S)
+        strike: Strike price (K)
+        time_to_expiry: Time to expiry in years (T)
+        risk_free_rate: Risk-free interest rate (r), default 5%
+        volatility: Implied volatility (σ), default 30%
+        option_type: 'call' or 'calls' or 'put' or 'puts'
+        
+    Returns:
+        Delta value (0 to 1 for calls, -1 to 0 for puts)
+    """
+    from scipy.stats import norm
+    from math import log, sqrt
+    
+    if spot_price <= 0 or strike <= 0 or time_to_expiry <= 0:
+        return 0.0
+    
+    # Calculate d1 from Black-Scholes formula
+    d1 = (log(spot_price / strike) + (risk_free_rate + 0.5 * volatility ** 2) * time_to_expiry) / \
+         (volatility * sqrt(time_to_expiry))
+    
+    # Delta for call: N(d1)
+    # Delta for put: N(d1) - 1
+    if option_type.lower() in ["call", "calls"]:
+        return norm.cdf(d1)
+    else:  # put
+        return norm.cdf(d1) - 1
+
+
+def calculate_implied_leverage(spot_price: float, option_price: float, strike: float,
+                               time_to_expiry: float, option_type: str = "call",
+                               risk_free_rate: float = 0.05, volatility: float = 0.30) -> float:
+    """Calculate implied leverage (Omega) for an option
+
+    Formula: Ω = Δ × (S / O)
+    Where:
+        Ω (Omega) = Implied leverage
+        Δ (Delta) = Option delta from Black-Scholes
+        S = Spot price (stock price)
+        O = Option price
+
+    This represents the percentage change in option value for a 1% change in stock price.
+    For example, if leverage is 10, a 1% move in stock results in ~10% move in option.
+
+    Note: When called from format_options_for_display(), this function requires the actual
+    implied volatility from Yahoo Finance API. If implied volatility is not available,
+    leverage will be None and displayed as "N/A".
+
+    Args:
+        spot_price: Current stock price (S)
+        option_price: Current option price (O)
+        strike: Strike price (needed for delta calculation)
+        time_to_expiry: Time to expiry in years (T)
+        option_type: 'call' or 'put'
+        risk_free_rate: Risk-free interest rate, default 5%
+        volatility: Implied volatility from Yahoo Finance (required for accurate calculation)
+
+    Returns:
+        Implied leverage (Omega) as a multiplier
+    """
+    if option_price <= 0 or spot_price <= 0:
+        return 0.0
+
+    # Calculate delta using Black-Scholes
+    delta = calculate_black_scholes_delta(spot_price, strike, time_to_expiry, 
+                                          risk_free_rate, volatility, option_type)
+    
+    # Omega = Delta × (S / O)
+    leverage = abs(delta) * (spot_price / option_price)
+    
+    return leverage
+
+
 def filter_expiry_dates(expiry_dates: list, max_days: int, show_all: bool = False) -> list:
     """Filter expiry dates based on maximum days from now
 
@@ -521,13 +601,28 @@ def format_options_for_display(
                 return_str = "N/A"
                 return_metric = None
 
+            # Calculate implied leverage using implied volatility from Yahoo Finance
+            # Only calculate if implied volatility is available (no default fallback)
+            leverage = None
+            if last_price > 0 and strike > 0 and dte > 0:
+                time_to_expiry_years = dte / 365.0
+                # Get implied volatility from Yahoo Finance data
+                implied_vol = option.get("impliedVolatility", None)
+                if implied_vol and implied_vol > 0:
+                    # Use actual market implied volatility
+                    leverage = calculate_implied_leverage(
+                        spot_price, last_price, strike, time_to_expiry_years, option_type,
+                        volatility=implied_vol
+                    )
+                # If no implied volatility available, leverage remains None (will display as N/A)
+
             # Calculate strike percentage (% above/below spot)
             strike_pct = None
             if spot_price > 0 and strike > 0:
                 strike_pct = ((strike - spot_price) / spot_price) * 100
 
             # Create option data dict for filtering
-            # Field aliases: ret/ar for return, sp for strike_pct, lt_days for last trade days
+            # Field aliases: ret/ar for return, sp for strike_pct, lt_days for last trade days, lev for leverage
             option_data = {
                 "dte": dte,
                 "volume": volume,
@@ -538,16 +633,19 @@ def format_options_for_display(
                 "strike_pct": strike_pct,  # Percentage above/below spot
                 "sp": strike_pct,  # Alias for strike_pct
                 "lt_days": lt_days,  # Days since last trade
+                "leverage": leverage,  # Implied leverage
+                "lev": leverage,  # Alias for leverage
             }
 
             # Apply filter_ast if provided
             if filter_ast and not evaluate_filter(filter_ast, option_data):
                 continue
 
-            # Format as "TICKER STRIKEC/P XDTE (price, return)"
+            # Format as "TICKER STRIKEC/P XDTE (price, return, leverage)"
             option_type_letter = "C" if option_type == "calls" else "P"
+            leverage_str = f"{leverage:.1f}x" if leverage and leverage > 0 else "N/A"
             formatted_option = (
-                f"{ticker.upper()} {strike:.0f}{option_type_letter} {dte}DTE (${last_price:.2f}, {return_str})"
+                f"{ticker.upper()} {strike:.0f}{option_type_letter} {dte}DTE (${last_price:.2f}, {return_str}, {leverage_str})"
             )
 
             # Store additional data for sorting
@@ -559,6 +657,7 @@ def format_options_for_display(
                     "volume": volume,
                     "price": last_price,
                     "return_metric": return_metric,
+                    "leverage": leverage,
                 }
             )
 
