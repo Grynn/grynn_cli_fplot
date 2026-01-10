@@ -76,6 +76,7 @@ AAPL 235C 35DTE ($1.85, 35.1%, 54.1x, eff:92)
 ```
 
 Format: `TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric, leverage, eff:percentile)`
+- **Price**: Uses **ask price** (what you'd pay to buy) for accurate buyer calculations. Falls back to lastPrice if ask unavailable.
 - For calls: return_metric is CAGR to breakeven
 - For puts: return_metric is annualized return
 - Leverage: Implied leverage (Ω = Δ × S/O) where Δ is Black-Scholes delta, S is spot price, O is option price
@@ -111,7 +112,9 @@ The `--filter` option supports complex filter expressions with logical operators
 - **Filter Fields:**
   - `dte`: Days to expiry
   - `volume`: Option volume
-  - `price`: Last price
+  - `price`: Option price (ask price for buyers)
+  - `bid`: Bid price (what you'd receive if selling)
+  - `ask`: Ask price (what you'd pay if buying)
   - `return`, `ret`, `ar`: Return metric (CAGR for calls, annualized return for puts) - all aliases work
   - `strike_pct`, `sp`: Strike percentage above/below spot (positive = above spot, negative = below spot)
   - `lt_days`: Days since last trade (useful for filtering stale options)

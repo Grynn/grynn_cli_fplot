@@ -70,6 +70,16 @@ FILTER_FIELDS = {
         "example": "efficiency>80",
     },
     "eff": {"description": "Alias for 'efficiency'", "type": "float", "alias_of": "efficiency", "example": "eff>80"},
+    "bid": {
+        "description": "Bid price (what you'd receive if selling)",
+        "type": "float",
+        "example": "bid>5",
+    },
+    "ask": {
+        "description": "Ask price (what you'd pay if buying, used for calculations)",
+        "type": "float",
+        "example": "ask<10",
+    },
 }
 
 

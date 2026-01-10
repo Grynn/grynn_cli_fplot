@@ -568,7 +568,18 @@ def format_options_for_display(
         for option in options_list:
             strike = option.get("strike", 0)
             volume = option.get("volume", 0) or 0  # Handle None values
-            last_price = option.get("lastPrice", 0) or 0
+            
+            # Use ask price (what you'd pay to buy) with fallback to lastPrice
+            # This gives more accurate pricing for buyers
+            ask_price = option.get("ask", None)
+            last_price = option.get("lastPrice", None)
+            
+            if ask_price and ask_price > 0:
+                option_price = ask_price
+            elif last_price and last_price > 0:
+                option_price = last_price
+            else:
+                option_price = 0
 
             # Get last trade date and calculate days since last trade
             last_trade_date = option.get("lastTradeDate", None)
@@ -592,11 +603,11 @@ def format_options_for_display(
                     lt_days = None
 
             # Calculate return metric based on option type
-            if option_type == "calls" and last_price > 0:
-                return_metric = calculate_cagr_to_breakeven(spot_price, strike, last_price, dte)
+            if option_type == "calls" and option_price > 0:
+                return_metric = calculate_cagr_to_breakeven(spot_price, strike, option_price, dte)
                 return_str = f"{return_metric:.2%}"
-            elif option_type == "puts" and last_price > 0:
-                return_metric = calculate_put_annualized_return(spot_price, last_price, dte)
+            elif option_type == "puts" and option_price > 0:
+                return_metric = calculate_put_annualized_return(spot_price, option_price, dte)
                 return_str = f"{return_metric:.2%}"
             else:
                 # No valid price for calculation - display N/A and set metric to None
@@ -607,14 +618,14 @@ def format_options_for_display(
             # Calculate implied leverage using implied volatility from Yahoo Finance
             # Only calculate if implied volatility is available (no default fallback)
             leverage = None
-            if last_price > 0 and strike > 0 and dte > 0:
+            if option_price > 0 and strike > 0 and dte > 0:
                 time_to_expiry_years = dte / 365.0
                 # Get implied volatility from Yahoo Finance data
                 implied_vol = option.get("impliedVolatility", None)
                 if implied_vol and implied_vol > 0:
                     # Use actual market implied volatility
                     leverage = calculate_implied_leverage(
-                        spot_price, last_price, strike, time_to_expiry_years, option_type,
+                        spot_price, option_price, strike, time_to_expiry_years, option_type,
                         volatility=implied_vol
                     )
                 # If no implied volatility available, leverage remains None (will display as N/A)
@@ -636,7 +647,9 @@ def format_options_for_display(
                 "strike": strike,
                 "dte": dte,
                 "volume": volume,
-                "price": last_price,
+                "price": option_price,
+                "bid": option.get("bid", None),
+                "ask": option.get("ask", None),
                 "return_metric": return_metric,
                 "return_str": return_str,
                 "leverage": leverage,
@@ -663,6 +676,8 @@ def format_options_for_display(
             "dte": opt["dte"],
             "volume": opt["volume"],
             "price": opt["price"],
+            "bid": opt.get("bid", None),
+            "ask": opt.get("ask", None),
             "return": opt["return_metric"],
             "ret": opt["return_metric"],
             "ar": opt["return_metric"],
