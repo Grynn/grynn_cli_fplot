@@ -56,6 +56,20 @@ FILTER_FIELDS = {
         "type": "integer",
         "example": "lt_days<7",
     },
+    "leverage": {
+        "description": "Implied leverage (Omega = Delta × spot_price / option_price)",
+        "type": "float",
+        "aliases": ["lev"],
+        "example": "leverage>5",
+    },
+    "lev": {"description": "Alias for 'leverage'", "type": "float", "alias_of": "leverage", "example": "lev>5"},
+    "efficiency": {
+        "description": "Efficiency percentile (leverage/CAGR, 0-100 scale)",
+        "type": "float",
+        "aliases": ["eff"],
+        "example": "efficiency>80",
+    },
+    "eff": {"description": "Alias for 'efficiency'", "type": "float", "alias_of": "efficiency", "example": "eff>80"},
 }
 
 
