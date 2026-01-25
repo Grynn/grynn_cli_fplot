@@ -90,22 +90,22 @@ def display_plot(
     \b
     # Single ticker
     fplot AAPL
-    
+
     # Multiple tickers (space-separated)
     fplot AAPL TSLA MSFT
-    
+
     # Comma-separated tickers
     fplot AAPL,TSLA
-    
+
     # Division operations
     fplot AAPL/XLK
-    
+
     # Mixed inputs
     fplot AAPL AAPL/XLK TW.L
-    
+
     # Quoted strings with commas
     fplot "AAPL, TSLA"
-    
+
     # List all AAPL call options (default: 6 months max)
     fplot AAPL --call
 
@@ -129,7 +129,7 @@ def display_plot(
         print(f"fplot {__version__}")
         return
 
-# Show filter help if requested
+    # Show filter help if requested
     if filter_help:
         from grynn_fplot.filter_parser import get_filter_help
 
@@ -141,15 +141,13 @@ def display_plot(
     # Launch web interface if --web flag is used
     if web:
         # For web interface, join tickers back into a string
-        ticker_str = ','.join(ticker_list) if ticker_list else None
+        ticker_str = ",".join(ticker_list) if ticker_list else None
         launch_web_interface(ticker_str, since, interval, port, host, no_browser, debug)
         return
 
     # CLI mode - require ticker
     if not ticker_list:
-        click.echo(
-            "Error: Missing argument 'TICKER'. Please provide ticker symbol(s)."
-        )
+        click.echo("Error: Missing argument 'TICKER'. Please provide ticker symbol(s).")
         click.echo("Examples:")
         click.echo("  fplot AAPL")
         click.echo("  fplot AAPL TSLA")
@@ -351,37 +349,43 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
 def display_candlestick_plot(ticker, since, interval, debug):
     """Display candlestick plot with volume and SMAs for a single ticker"""
     from dateutil.relativedelta import relativedelta
-    
+
     requested_since = parse_start_date(since)
-    
+
     # Always fetch 3 years of data to ensure we can compute 200-day SMA
     # even if the user requested a shorter timeframe
     fetch_since = datetime.now() - relativedelta(years=3)
-    
+
     # Download OHLCV data (fetch 3 years)
     df_full = download_ohlcv_data(ticker, fetch_since, interval)
     if df_full.empty:
         print(f"No data found for {ticker}.")
         return
-    
+
     # Calculate SMAs on the full dataset (3 years)
-    sma_50 = df_full['Close'].rolling(window=50).mean()
-    sma_200 = df_full['Close'].rolling(window=200).mean()
-    
+    sma_50 = df_full["Close"].rolling(window=50).mean()
+    sma_200 = df_full["Close"].rolling(window=200).mean()
+
     # Filter to the requested timeframe for display
     if requested_since is not None:
-        df = df_full[df_full.index >= requested_since]
-        sma_50 = sma_50[sma_50.index >= requested_since]
-        sma_200 = sma_200[sma_200.index >= requested_since]
+        # Make requested_since timezone-aware if the index is timezone-aware
+        filter_since = requested_since
+        if df_full.index.tz is not None and requested_since.tzinfo is None:
+            filter_since = requested_since.replace(tzinfo=df_full.index.tz)
+        df = df_full[df_full.index >= filter_since]
+        sma_50 = sma_50[sma_50.index >= filter_since]
+        sma_200 = sma_200[sma_200.index >= filter_since]
     else:
         df = df_full
-    
+
     if df.empty:
         print(f"No data found for {ticker} in the requested timeframe.")
         return
-    
-    print(f"Generating candlestick plot for {ticker} since {requested_since.date() if requested_since else 'max'}. Interval: {interval}")
-    
+
+    print(
+        f"Generating candlestick plot for {ticker} since {requested_since.date() if requested_since else 'max'}. Interval: {interval}"
+    )
+
     if debug:
         print(f"Data for {ticker}:")
         print(f"Full dataset: {len(df_full)} rows, Display dataset: {len(df)} rows")
@@ -389,82 +393,84 @@ def display_candlestick_plot(ticker, since, interval, debug):
         temp_file = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
         df.to_csv(temp_file.name)
         print(f"Data saved to temporary file: {temp_file.name}")
-    
+
     # Create additional plots list for SMAs
     add_plots = []
-    
+
     # Add 50-day SMA if we have enough data
     if not sma_50.isna().all():
-        add_plots.append(mpf.make_addplot(sma_50, color='orange', width=1.5, label='50-day SMA'))
-    
+        add_plots.append(mpf.make_addplot(sma_50, color="orange", width=1.5, label="50-day SMA"))
+
     # Add 200-day SMA if we have enough data
     if not sma_200.isna().all():
-        add_plots.append(mpf.make_addplot(sma_200, color='red', width=1.5, label='200-day SMA'))
-    
+        add_plots.append(mpf.make_addplot(sma_200, color="red", width=1.5, label="200-day SMA"))
+
     # Configure mplfinance style
     mc = mpf.make_marketcolors(
-        up='green', down='red',
-        wick={'up': 'green', 'down': 'red'},
-        edge={'up': 'green', 'down': 'red'},
-        volume={'up': 'green', 'down': 'red'}
+        up="green",
+        down="red",
+        wick={"up": "green", "down": "red"},
+        edge={"up": "green", "down": "red"},
+        volume={"up": "green", "down": "red"},
     )
-    s = mpf.make_mpf_style(marketcolors=mc, gridstyle=':', y_on_right=False)
-    
+    s = mpf.make_mpf_style(marketcolors=mc, gridstyle=":", y_on_right=False)
+
     # Create the plot
     fig, axes = mpf.plot(
         df,
-        type='candle',
+        type="candle",
         style=s,
         volume=True,
         addplot=add_plots if add_plots else None,
         title=f"{ticker} - Candlestick Chart",
-        ylabel='Price',
-        ylabel_lower='Volume',
+        ylabel="Price",
+        ylabel_lower="Volume",
         figsize=(16, 10),
-        datetime_format='%Y-%m-%d',
+        datetime_format="%Y-%m-%d",
         xrotation=15,
         returnfig=True,
-        warn_too_much_data=1000  # Suppress warning for large datasets
+        warn_too_much_data=1000,  # Suppress warning for large datasets
     )
-    
+
     # Add legend for SMAs if they exist
     if add_plots:
         ax = axes[0]  # Main price axis
         # Create custom legend entries
         from matplotlib.lines import Line2D
+
         legend_elements = [
-            Line2D([0], [0], color='green', lw=2, label='Up Day'),
-            Line2D([0], [0], color='red', lw=2, label='Down Day'),
+            Line2D([0], [0], color="green", lw=2, label="Up Day"),
+            Line2D([0], [0], color="red", lw=2, label="Down Day"),
         ]
         if not sma_50.isna().all():
-            legend_elements.append(Line2D([0], [0], color='orange', lw=1.5, label='50-day SMA'))
+            legend_elements.append(Line2D([0], [0], color="orange", lw=1.5, label="50-day SMA"))
         if not sma_200.isna().all():
-            legend_elements.append(Line2D([0], [0], color='red', lw=1.5, label='200-day SMA'))
-        
-        ax.legend(handles=legend_elements, loc='best')
-    
+            legend_elements.append(Line2D([0], [0], color="red", lw=1.5, label="200-day SMA"))
+
+        ax.legend(handles=legend_elements, loc="best")
+
     plt.show()
 
 
 def display_cli_plot(ticker, since, interval, debug):
     """Display plot using matplotlib (original CLI functionality)"""
     from grynn_fplot.core import parse_ticker_input
-    
+
     # Parse ticker input to understand what we're dealing with
     parsed_tickers = parse_ticker_input(ticker)
-    
+
     # Check if this is a single ticker scenario (should use candlestick)
     # Single ticker means:
     # 1. No division operators in any ticker
     # 2. Exactly one ticker provided (not counting SPY which is auto-added)
-    has_division = any('/' in t for t in parsed_tickers)
+    has_division = any("/" in t for t in parsed_tickers)
     ticker_count = len(parsed_tickers)
-    
+
     # Route to candlestick chart for single ticker without division
     if not has_division and ticker_count == 1:
         display_candlestick_plot(parsed_tickers[0], since, interval, debug)
         return
-    
+
     # Otherwise, continue with existing line chart logic for multi-ticker or division
     since = parse_start_date(since)
 
