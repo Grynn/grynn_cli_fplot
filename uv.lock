@@ -393,6 +393,7 @@ dependencies = [
     { name = "ipywidgets" },
     { name = "matplotlib" },
     { name = "mplcursors" },
+    { name = "mplfinance" },
     { name = "pandas" },
     { name = "scikit-learn" },
     { name = "tabulate" },
@@ -426,6 +427,7 @@ requires-dist = [
     { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "matplotlib", specifier = ">=3.9.2" },
     { name = "mplcursors", specifier = "~=0.5.3" },
+    { name = "mplfinance", specifier = ">=0.12.9" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.1" },
     { name = "pandas", specifier = ">=2.2.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.3.4" },
@@ -839,6 +841,19 @@ dependencies = [
     { name = "matplotlib" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/70/11/26f6016ff1ed7c43b5ee51793ac9f9d14ea7f5af8e2ecf9703d8bb88c96b/mplcursors-0.5.3.tar.gz", hash = "sha256:cb220c8dffaafde195e138faec5654737267f7685d1f0503618cdc333aca0966", size = 88816, upload-time = "2024-01-11T20:53:54.286Z" }
+
+[[package]]
+name = "mplfinance"
+version = "0.12.10b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6c/a9/34e7998d02fb58fae04f750444ce4e95e75f3a08dad17fb2d32098a97834/mplfinance-0.12.10b0.tar.gz", hash = "sha256:7da150b5851aa5119ad6e06b55e48338b619bb6773f1b85df5de67a5ffd917bf", size = 70117, upload-time = "2023-08-02T15:13:53.829Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d7/d9/31c436ea7673c21a5bf3fc747bc7f63377582dfe845c3004d3e46f9deee0/mplfinance-0.12.10b0-py3-none-any.whl", hash = "sha256:76d3b095f05ff35de730751649de063bea4064d0c49b21b6182c82997a7f52bb", size = 75016, upload-time = "2023-08-02T15:13:52.022Z" },
+]
 
 [[package]]
 name = "multitasking"
