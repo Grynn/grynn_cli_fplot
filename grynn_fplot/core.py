@@ -130,6 +130,38 @@ def parse_interval(interval="1d"):
     return interval
 
 
+def download_ohlcv_data(ticker, since, interval="1d"):
+    """Download OHLCV (Open, High, Low, Close, Volume) data from Yahoo Finance
+    
+    Args:
+        ticker: Single ticker symbol (e.g., "AAPL")
+        since: Start date (datetime object or None for max)
+        interval: Data interval (e.g., "1d", "1wk", "1mo")
+        
+    Returns:
+        DataFrame with columns: Open, High, Low, Close, Volume
+        Index is DatetimeIndex
+    """
+    if yfinance is None:
+        raise ImportError("yfinance package is required for ticker data functionality")
+    
+    interval = parse_interval(interval)
+    
+    # Only pass start parameter if since is not None
+    kwargs = {"interval": interval, "auto_adjust": False}
+    if since is not None:
+        kwargs["start"] = since
+    
+    # Download OHLCV data for the ticker
+    ticker_obj = yfinance.Ticker(ticker)
+    df = ticker_obj.history(**kwargs)
+    
+    # Return only the OHLCV columns we need
+    # yfinance returns: Open, High, Low, Close, Volume (and sometimes Dividends, Stock Splits)
+    ohlcv_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    return df[ohlcv_columns]
+
+
 def download_ticker_data(ticker, since, interval="1d"):
     """Download data from Yahoo Finance
     

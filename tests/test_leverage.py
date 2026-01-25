@@ -1,6 +1,5 @@
 """Unit tests for implied leverage calculation with Black-Scholes delta"""
 
-import pytest
 from grynn_fplot.core import calculate_black_scholes_delta, calculate_implied_leverage
 
 

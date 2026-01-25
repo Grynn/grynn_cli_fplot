@@ -33,16 +33,25 @@ class TestCLIArgumentParsing(unittest.TestCase):
         self.assertIn("Missing argument", result.output)
         self.assertIn("Examples:", result.output)
 
-    @patch("grynn_fplot.cli.download_ticker_data")
+    @patch("grynn_fplot.cli.download_ohlcv_data")
     @patch("grynn_fplot.cli.plt.show")
-    def test_single_ticker(self, mock_show, mock_download):
-        """Test single ticker argument."""
-        mock_df = self._create_mock_df(["AAPL", "SPY"])
-        mock_download.return_value = mock_df
+    def test_single_ticker(self, mock_show, mock_download_ohlcv):
+        """Test single ticker argument - should use candlestick chart."""
+        # Create OHLCV data for single ticker (3 years since we always fetch 3 years)
+        dates = pd.date_range(start=datetime.now() - timedelta(days=1095), periods=1095, freq='D')
+        data = {
+            'Open': [100 + i * 0.1 for i in range(1095)],
+            'High': [101 + i * 0.1 for i in range(1095)],
+            'Low': [99 + i * 0.1 for i in range(1095)],
+            'Close': [100.5 + i * 0.1 for i in range(1095)],
+            'Volume': [1000000 + i * 1000 for i in range(1095)]
+        }
+        mock_df = pd.DataFrame(data, index=dates)
+        mock_download_ohlcv.return_value = mock_df
 
         result = self.runner.invoke(display_plot, ["AAPL"])
         self.assertEqual(result.exit_code, 0)
-        mock_download.assert_called_once()
+        mock_download_ohlcv.assert_called_once()
 
     @patch("grynn_fplot.cli.download_ticker_data")
     @patch("grynn_fplot.cli.plt.show")

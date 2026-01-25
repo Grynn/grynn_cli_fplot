@@ -18,6 +18,7 @@ dependencies = [
   "matplotlib >= 3.9.2",
   "dateparser ~= 1.2.0",
   "mplcursors ~= 0.5.3",
+  "mplfinance >= 0.12.9",
   "fastapi ~= 0.115.0",
   "uvicorn ~= 0.32.0",
   "scikit-learn >= 1.6.1",
