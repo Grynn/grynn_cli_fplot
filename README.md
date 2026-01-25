@@ -141,3 +141,9 @@ The `--filter` option supports complex filter expressions with logical operators
     - `--filter "lt_days<=7"` - Options traded in the last week
 
 Options data is cached for 1 hour to improve performance and reduce API calls.
+
+## TODO
+
+- fplot --call | fzf lets you select a call; once a call is selected it should be possible to plot a chart for it (yfinance provides price history for option identifiers)
+- need more examples of usage with fzf to pick a call
+- use grynn_pylib to download options (does it have identifiers that can be used to fetch price history?)

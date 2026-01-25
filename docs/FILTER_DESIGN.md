@@ -138,11 +138,11 @@ The `evaluate_filter()` function in `grynn_fplot/core.py` evaluates a filter AST
 ```python
 def evaluate_filter(filter_ast: dict, data: dict) -> bool:
     """Evaluate a filter AST against data.
-    
+
     Args:
         filter_ast: Parsed filter AST
         data: Dictionary with option data
-        
+
     Returns:
         True if data passes filter, False otherwise
     """
