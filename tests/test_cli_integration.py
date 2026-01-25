@@ -37,14 +37,14 @@ class TestCLIArgumentParsing(unittest.TestCase):
     @patch("grynn_fplot.cli.plt.show")
     def test_single_ticker(self, mock_show, mock_download_ohlcv):
         """Test single ticker argument - should use candlestick chart."""
-        # Create OHLCV data for single ticker
-        dates = pd.date_range(start=datetime.now() - timedelta(days=250), periods=250, freq='D')
+        # Create OHLCV data for single ticker (3 years since we always fetch 3 years)
+        dates = pd.date_range(start=datetime.now() - timedelta(days=1095), periods=1095, freq='D')
         data = {
-            'Open': [100 + i * 0.1 for i in range(250)],
-            'High': [101 + i * 0.1 for i in range(250)],
-            'Low': [99 + i * 0.1 for i in range(250)],
-            'Close': [100.5 + i * 0.1 for i in range(250)],
-            'Volume': [1000000 + i * 1000 for i in range(250)]
+            'Open': [100 + i * 0.1 for i in range(1095)],
+            'High': [101 + i * 0.1 for i in range(1095)],
+            'Low': [99 + i * 0.1 for i in range(1095)],
+            'Close': [100.5 + i * 0.1 for i in range(1095)],
+            'Volume': [1000000 + i * 1000 for i in range(1095)]
         }
         mock_df = pd.DataFrame(data, index=dates)
         mock_download_ohlcv.return_value = mock_df

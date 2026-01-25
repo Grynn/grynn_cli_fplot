@@ -350,26 +350,45 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
 
 def display_candlestick_plot(ticker, since, interval, debug):
     """Display candlestick plot with volume and SMAs for a single ticker"""
-    since = parse_start_date(since)
+    from dateutil.relativedelta import relativedelta
     
-    # Download OHLCV data
-    df = download_ohlcv_data(ticker, since, interval)
-    if df.empty:
+    requested_since = parse_start_date(since)
+    
+    # Always fetch 3 years of data to ensure we can compute 200-day SMA
+    # even if the user requested a shorter timeframe
+    fetch_since = datetime.now() - relativedelta(years=3)
+    
+    # Download OHLCV data (fetch 3 years)
+    df_full = download_ohlcv_data(ticker, fetch_since, interval)
+    if df_full.empty:
         print(f"No data found for {ticker}.")
         return
     
-    print(f"Generating candlestick plot for {ticker} since {since.date()}. Interval: {interval}")
+    # Calculate SMAs on the full dataset (3 years)
+    sma_50 = df_full['Close'].rolling(window=50).mean()
+    sma_200 = df_full['Close'].rolling(window=200).mean()
+    
+    # Filter to the requested timeframe for display
+    if requested_since is not None:
+        df = df_full[df_full.index >= requested_since]
+        sma_50 = sma_50[sma_50.index >= requested_since]
+        sma_200 = sma_200[sma_200.index >= requested_since]
+    else:
+        df = df_full
+    
+    if df.empty:
+        print(f"No data found for {ticker} in the requested timeframe.")
+        return
+    
+    print(f"Generating candlestick plot for {ticker} since {requested_since.date() if requested_since else 'max'}. Interval: {interval}")
     
     if debug:
         print(f"Data for {ticker}:")
+        print(f"Full dataset: {len(df_full)} rows, Display dataset: {len(df)} rows")
         print(df.head())
         temp_file = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
         df.to_csv(temp_file.name)
         print(f"Data saved to temporary file: {temp_file.name}")
-    
-    # Calculate SMAs (50-day and 200-day)
-    sma_50 = df['Close'].rolling(window=50).mean()
-    sma_200 = df['Close'].rolling(window=200).mean()
     
     # Create additional plots list for SMAs
     add_plots = []

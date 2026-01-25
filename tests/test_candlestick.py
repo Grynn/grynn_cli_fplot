@@ -13,8 +13,8 @@ class TestCandlestickChart(unittest.TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
-    def _create_ohlcv_df(self, days=250):
-        """Create a mock OHLCV DataFrame."""
+    def _create_ohlcv_df(self, days=1095):
+        """Create a mock OHLCV DataFrame. Default is 3 years (1095 days)."""
         dates = pd.date_range(start=datetime.now() - timedelta(days=days), periods=days, freq='D')
         data = {
             'Open': [100 + i * 0.1 for i in range(days)],
@@ -35,7 +35,7 @@ class TestCandlestickChart(unittest.TestCase):
     @patch("grynn_fplot.cli.plt.show")
     def test_single_ticker_uses_candlestick(self, mock_show, mock_download_ohlcv):
         """Test that single ticker uses candlestick chart."""
-        mock_df = self._create_ohlcv_df(days=250)
+        mock_df = self._create_ohlcv_df(days=1095)  # 3 years of data
         mock_download_ohlcv.return_value = mock_df
 
         result = self.runner.invoke(display_plot, ["AAPL"])
@@ -72,8 +72,8 @@ class TestCandlestickChart(unittest.TestCase):
     @patch("grynn_fplot.cli.plt.show")
     def test_candlestick_with_sma_data(self, mock_show, mock_download_ohlcv):
         """Test candlestick with sufficient data for SMAs."""
-        # Create data with 250 days to ensure SMAs can be calculated
-        mock_df = self._create_ohlcv_df(days=250)
+        # Create data with 1095 days (3 years) to ensure SMAs can be calculated
+        mock_df = self._create_ohlcv_df(days=1095)
         mock_download_ohlcv.return_value = mock_df
 
         result = self.runner.invoke(display_plot, ["AAPL", "--since", "1y"])
@@ -82,10 +82,10 @@ class TestCandlestickChart(unittest.TestCase):
 
     @patch("grynn_fplot.cli.download_ohlcv_data")
     @patch("grynn_fplot.cli.plt.show")
-    def test_candlestick_with_limited_data(self, mock_show, mock_download_ohlcv):
-        """Test candlestick with limited data (no 200-day SMA)."""
-        # Create data with only 100 days
-        mock_df = self._create_ohlcv_df(days=100)
+    def test_candlestick_with_limited_display_window(self, mock_show, mock_download_ohlcv):
+        """Test candlestick with short display window but full data fetch."""
+        # Create data with 3 years but only display 3 months
+        mock_df = self._create_ohlcv_df(days=1095)
         mock_download_ohlcv.return_value = mock_df
 
         result = self.runner.invoke(display_plot, ["AAPL", "--since", "3m"])
