@@ -84,12 +84,11 @@ def display_plot(
 
     Output format:
     - Calls: TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile)
-    - Puts:  TICKER dd/Mon/yy (XXd) strike:NNN be:NNN.NN $price ar:XX.XX%
+    - Puts: table with expiry, strike, breakeven, lt_days, AR (bid/ask/last)
 
     Return metrics:
     - Calls: CAGR to breakeven
     - Puts: AR = premium / capital-at-risk, annualized (capital-at-risk = strike - premium)
-    - Breakeven (be) = strike - premium
 
     Examples:
     \b

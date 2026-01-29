@@ -702,6 +702,8 @@ def format_options_for_display(
             strike = option.get("strike", 0)
             volume = option.get("volume", 0) or 0  # Handle None values
             last_price = option.get("lastPrice", 0) or 0
+            bid_price = option.get("bid", 0) or 0
+            ask_price = option.get("ask", 0) or 0
 
             # Get last trade date and calculate days since last trade
             last_trade_date = option.get("lastTradeDate", None)
@@ -737,6 +739,18 @@ def format_options_for_display(
                 return_str = "N/A"
                 return_metric = None
 
+            # Calculate AR for bid/ask (puts only)
+            ar_bid = (
+                calculate_put_annualized_return(strike, bid_price, dte)
+                if option_type == "puts" and bid_price > 0
+                else None
+            )
+            ar_ask = (
+                calculate_put_annualized_return(strike, ask_price, dte)
+                if option_type == "puts" and ask_price > 0
+                else None
+            )
+
             # Calculate implied leverage using implied volatility from Yahoo Finance
             # Only calculate if implied volatility is available (no default fallback)
             leverage = None
@@ -771,6 +785,10 @@ def format_options_for_display(
                     "expiry_date": expiry_date,
                     "volume": volume,
                     "price": last_price,
+                    "bid": bid_price,
+                    "ask": ask_price,
+                    "ar_bid": ar_bid,
+                    "ar_ask": ar_ask,
                     "return_metric": return_metric,
                     "return_str": return_str,
                     "leverage": leverage,
@@ -814,7 +832,7 @@ def format_options_for_display(
         if filter_ast and not evaluate_filter(filter_ast, option_data):
             continue
 
-        # Format display string
+        # Store for sorting/display
         option_type_letter = "C" if opt["option_type"] == "calls" else "P"
 
         if opt["option_type"] == "calls":
@@ -825,17 +843,8 @@ def format_options_for_display(
                 f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str})"
             )
         else:
-            # Format expiry date as dd/Mon/yy (e.g. 27/Jan/24)
-            expiry_dt = datetime.strptime(opt["expiry_date"], "%Y-%m-%d")
-            expiry_fmt = expiry_dt.strftime("%d/%b/%y")
-            breakeven = opt["strike"] - opt["price"]
-            formatted_option = (
-                f"{opt['ticker'].upper()} {expiry_fmt} ({opt['dte']}d) "
-                f"strike:{opt['strike']:.0f} be:{breakeven:.2f} "
-                f"${opt['price']:.2f} ar:{opt['return_str']}"
-            )
+            formatted_option = None  # puts use table format
 
-        # Store for sorting
         formatted_options.append(
             {
                 "display": formatted_option,
@@ -846,6 +855,13 @@ def format_options_for_display(
                 "return_metric": opt["return_metric"],
                 "leverage": opt["leverage"],
                 "efficiency": efficiency,
+                # put-specific fields
+                "expiry_date": opt.get("expiry_date"),
+                "bid": opt.get("bid", 0),
+                "ask": opt.get("ask", 0),
+                "ar_bid": opt.get("ar_bid"),
+                "ar_ask": opt.get("ar_ask"),
+                "lt_days": opt.get("lt_days"),
             }
         )
 
@@ -869,5 +885,34 @@ def format_options_for_display(
         # Sort by efficiency percentile (highest first)
         formatted_options.sort(key=lambda x: x["efficiency"] if x["efficiency"] is not None else -1, reverse=True)
 
-    # Return just the display strings
-    return [option["display"] for option in formatted_options]
+    # For calls, return display strings
+    if option_type == "calls":
+        return [option["display"] for option in formatted_options]
+
+    # For puts, build a table
+    lines = [f"spot = ${spot_price:.2f}", ""]
+
+    # Table header
+    header = f"{'Expiry':<20} {'Strike':>7} {'Breakeven':>16} {'LT':>4} {'AR (bid / ask / last)':>30}"
+    lines.append(header)
+    lines.append("-" * len(header))
+
+    for opt in formatted_options:
+        expiry_dt = datetime.strptime(opt["expiry_date"], "%Y-%m-%d")
+        expiry_fmt = f"{expiry_dt.strftime('%d/%b/%y')} ({opt['dte']}d)"
+
+        breakeven = opt["strike"] - opt["price"]
+        be_pct = (breakeven / opt["strike"] - 1) * 100 if opt["strike"] > 0 else 0
+        be_str = f"${breakeven:.2f} ({be_pct:+.1f}%)"
+
+        lt_str = f"{opt['lt_days']}d" if opt["lt_days"] is not None else "-"
+
+        ar_bid_str = f"{opt['ar_bid']:.0%}" if opt["ar_bid"] else "-"
+        ar_ask_str = f"{opt['ar_ask']:.0%}" if opt["ar_ask"] else "-"
+        ar_last_str = f"{opt['return_metric']:.0%}" if opt["return_metric"] else "-"
+        ar_str = f"bid:{ar_bid_str} ask:{ar_ask_str} last:{ar_last_str}"
+
+        row = f"{expiry_fmt:<20} {opt['strike']:>7.0f} {be_str:>16} {lt_str:>4} {ar_str:>30}"
+        lines.append(row)
+
+    return lines

@@ -77,17 +77,19 @@ AAPL 230C 35DTE ($3.10, 25.2%, 32.3x, eff:78)
 ```
 Format: `TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile)`
 
-**Puts** show expiry, strike, breakeven, and annualized return:
+**Puts** display a table with spot price header, expiry, strike, breakeven, and AR computed from bid/ask/last:
 ```
-AAPL 27/Mar/25 (35d) strike:220 be:217.85 $2.15 ar:24.80%
-AAPL 27/Mar/25 (35d) strike:215 be:213.60 $1.40 ar:15.30%
+spot = $235.50
+
+Expiry               Strike        Breakeven   LT              AR (bid / ask / last)
+---------------------------------------------------------------------------
+27/Mar/25 (35d)         220   $217.85 (-1.0%)   1d     bid:20% ask:28% last:25%
+27/Mar/25 (35d)         215   $213.60 (-0.7%)   3d     bid:12% ask:18% last:15%
 ```
-Format: `TICKER dd/Mon/yy (DTE) strike:NNN be:NNN.NN $price ar:XX.XX%`
 
 **Return metrics:**
 - Calls: CAGR to breakeven
 - Puts: AR = premium / capital-at-risk, annualized (capital-at-risk = strike - premium)
-- Breakeven (be) = strike - premium
 
 **Leverage & Efficiency (calls only):**
 - Leverage: Implied leverage (Ω = Δ × S/O) where Δ is Black-Scholes delta, S is spot price, O is option price
