@@ -152,49 +152,64 @@ def display_plot(
     if list_filters:
         from grynn_fplot.filter_store import load_filters, get_default_filter
 
-        filters = load_filters()
-        default_name = get_default_filter()
-        if not filters:
-            click.echo('No saved filters. Save one with: fplot --save-filter NAME --filter "EXPRESSION"')
-        else:
-            click.echo("Saved filters:")
-            for name, expr in sorted(filters.items()):
-                marker = " (default)" if name == default_name else ""
-                click.echo(f"  {name}: {expr}{marker}")
+        has_any = False
+        for otype in ("calls", "puts"):
+            filters = load_filters(otype)
+            default_name = get_default_filter(otype)
+            if filters:
+                has_any = True
+                click.echo(f"{otype}:")
+                for name, expr in sorted(filters.items()):
+                    marker = " (default)" if name == default_name else ""
+                    click.echo(f"  {name}: {expr}{marker}")
+        if not has_any:
+            click.echo('No saved filters. Save one with: fplot --call --save-filter NAME --filter "EXPRESSION"')
         return
 
+    # Determine option type for filter management commands
+    filter_mgmt_type = "calls" if call else "puts" if put else None
+
     if delete_filter:
+        if not filter_mgmt_type:
+            click.echo("Error: --delete-filter requires --call or --put to specify which type.")
+            return
         from grynn_fplot.filter_store import delete_filter as do_delete
 
-        if do_delete(delete_filter):
-            click.echo(f"Deleted filter '{delete_filter}'.")
+        if do_delete(delete_filter, filter_mgmt_type):
+            click.echo(f"Deleted {filter_mgmt_type} filter '{delete_filter}'.")
         else:
-            click.echo(f"Filter '{delete_filter}' not found.")
+            click.echo(f"Filter '{delete_filter}' not found in {filter_mgmt_type}.")
         return
 
     if save_filter:
+        if not filter_mgmt_type:
+            click.echo("Error: --save-filter requires --call or --put to specify which type.")
+            return
         if not filter_expr:
             click.echo("Error: --save-filter requires --filter to specify the expression to save.")
             return
         try:
             from grynn_fplot.filter_store import save_filter as do_save
 
-            do_save(save_filter, filter_expr)
-            click.echo(f"Saved filter '{save_filter}': {filter_expr}")
+            do_save(save_filter, filter_expr, filter_mgmt_type)
+            click.echo(f"Saved {filter_mgmt_type} filter '{save_filter}': {filter_expr}")
         except (ValueError, Exception) as e:
             click.echo(f"Error: {e}")
         return
 
     if default_filter is not None:
-        from grynn_fplot.filter_store import set_default_filter, get_default_filter
+        if not filter_mgmt_type:
+            click.echo("Error: --default-filter requires --call or --put to specify which type.")
+            return
+        from grynn_fplot.filter_store import set_default_filter
 
         try:
             if default_filter.lower() == "none":
-                set_default_filter(None)
-                click.echo("Cleared default filter.")
+                set_default_filter(None, filter_mgmt_type)
+                click.echo(f"Cleared default {filter_mgmt_type} filter.")
             else:
-                set_default_filter(default_filter)
-                click.echo(f"Default filter set to '{default_filter}'.")
+                set_default_filter(default_filter, filter_mgmt_type)
+                click.echo(f"Default {filter_mgmt_type} filter set to '{default_filter}'.")
         except ValueError as e:
             click.echo(f"Error: {e}")
         return
@@ -223,19 +238,20 @@ def display_plot(
     # Resolve filter: named preset, inline expression, or default
     parsed_filter = None
     effective_filter_expr = filter_expr
-    if not effective_filter_expr and (call or put):
+    active_option_type = "calls" if call else "puts" if put else None
+    if not effective_filter_expr and active_option_type:
         # Apply default filter if no explicit filter provided for options
         from grynn_fplot.filter_store import get_default_filter, resolve_filter
 
-        default_name = get_default_filter()
+        default_name = get_default_filter(active_option_type)
         if default_name:
-            effective_filter_expr = resolve_filter(default_name)
+            effective_filter_expr = resolve_filter(default_name, active_option_type)
             if debug:
-                logger.debug(f"Using default filter '{default_name}': {effective_filter_expr}")
-    elif effective_filter_expr:
+                logger.debug(f"Using default {active_option_type} filter '{default_name}': {effective_filter_expr}")
+    elif effective_filter_expr and active_option_type:
         from grynn_fplot.filter_store import resolve_filter
 
-        resolved = resolve_filter(effective_filter_expr)
+        resolved = resolve_filter(effective_filter_expr, active_option_type)
         if resolved != effective_filter_expr:
             if debug:
                 logger.debug(f"Resolved filter '{effective_filter_expr}' to: {resolved}")

@@ -156,26 +156,32 @@ The `--filter` option supports complex filter expressions with logical operators
 
 **Named Filter Presets:**
 
-Save frequently used filters for quick reuse. Filters are stored in `~/.config/grynn_fplot/filters.json`.
+Save frequently used filters for quick reuse. Filters are separate for calls and puts,
+stored in `~/.config/grynn_fplot/filters.json`.
 
 ```shell
-# Save a filter
-fplot --save-filter vishal --filter "dte>7, lt_days<2d15h, sp<15, dte<33"
+# Save a put filter
+fplot --put --save-filter vishal --filter "dte>7, lt_days<2d15h, sp<15, dte<33"
+
+# Save a call filter
+fplot --call --save-filter leaps --filter "dte>1y, sp>5"
 
 # Use a saved filter
 fplot AAPL --put --filter vishal
+fplot AAPL --call --filter leaps
 
-# List saved filters
+# List all saved filters (shows both calls and puts)
 fplot --list-filters
 
 # Delete a saved filter
-fplot --delete-filter vishal
+fplot --put --delete-filter vishal
 
 # Set a default filter (applied when no --filter is given)
-fplot --default-filter vishal
+fplot --put --default-filter vishal
+fplot --call --default-filter leaps
 
 # Clear the default
-fplot --default-filter none
+fplot --put --default-filter none
 ```
 
 Options data is cached for 1 hour to improve performance and reduce API calls.

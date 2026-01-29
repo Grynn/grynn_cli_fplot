@@ -34,7 +34,7 @@ license = {text = "MIT"}
 name = "grynn-fplot"
 readme = "README.md"
 requires-python = ">=3.12"
-version = "0.4.0"
+version = "0.4.1"
 
 [project.scripts]
 fplot = "grynn_fplot.cli:display_plot"

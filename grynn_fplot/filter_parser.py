@@ -578,13 +578,13 @@ def get_filter_help() -> str:
 
     # Named filter presets
     help_lines.append("\n")
-    help_lines.append("Named Filter Presets:")
+    help_lines.append("Named Filter Presets (separate for calls and puts):")
     help_lines.append("-" * 50)
-    help_lines.append('  Save:    fplot --save-filter NAME --filter "EXPRESSION"')
+    help_lines.append('  Save:    fplot --put --save-filter NAME --filter "EXPRESSION"')
     help_lines.append("  Use:     fplot AAPL --put --filter NAME")
     help_lines.append("  List:    fplot --list-filters")
-    help_lines.append("  Delete:  fplot --delete-filter NAME")
-    help_lines.append("  Default: fplot --default-filter NAME  (applied when no --filter given)")
-    help_lines.append("  Clear:   fplot --default-filter none")
+    help_lines.append("  Delete:  fplot --put --delete-filter NAME")
+    help_lines.append("  Default: fplot --put --default-filter NAME  (applied when no --filter given)")
+    help_lines.append("  Clear:   fplot --put --default-filter none")
 
     return "\n".join(help_lines)
