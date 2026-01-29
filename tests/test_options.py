@@ -42,9 +42,10 @@ class TestOptionsCore(unittest.TestCase):
     def test_format_options_for_display_with_data(self, mock_spot_price, mock_fetch):
         """Test format_options_for_display with mock data"""
         from datetime import datetime, timedelta
+
         # Use a future date that won't expire
         future_date = (datetime.now() + timedelta(days=30)).strftime("%Y-%m-%d")
-        
+
         mock_spot_price.return_value = 150.0
         mock_data = {
             "expiry_dates": [future_date],
@@ -110,17 +111,19 @@ class TestOptionsCore(unittest.TestCase):
 
     def test_calculate_put_annualized_return(self):
         """Test annualized return calculation for puts"""
-        spot_price = 150.0
+        strike_price = 145.0
         option_price = 3.0
         dte = 30
 
-        annual_return = calculate_put_annualized_return(spot_price, option_price, dte)
-        self.assertGreater(annual_return, 0)
+        # premium / (strike - premium) * 365 / dte = 3 / 142 * 365 / 30 = 0.2570...
+        annual_return = calculate_put_annualized_return(strike_price, option_price, dte)
+        expected = (3.0 / (145.0 - 3.0)) * 365 / 30
+        self.assertAlmostEqual(annual_return, expected, places=6)
 
         # Test edge cases
-        self.assertEqual(calculate_put_annualized_return(150, 0, 30), 0.0)
-        self.assertEqual(calculate_put_annualized_return(150, 5, 0), 0.0)
-        self.assertEqual(calculate_put_annualized_return(150, 200, 30), 0.0)  # option price > spot
+        self.assertEqual(calculate_put_annualized_return(145, 0, 30), 0.0)
+        self.assertEqual(calculate_put_annualized_return(145, 5, 0), 0.0)
+        self.assertEqual(calculate_put_annualized_return(145, 200, 30), 0.0)  # premium > strike
 
 
 if __name__ == "__main__":

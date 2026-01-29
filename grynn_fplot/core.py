@@ -16,7 +16,7 @@ from pathlib import Path
 
 def parse_ticker_input(ticker_input: Union[str, List[str]]) -> List[str]:
     """Parse ticker input supporting multiple formats.
-    
+
     Supports:
     - Single ticker: "AAPL"
     - Comma-separated: "AAPL,TSLA" or "AAPL, TSLA"
@@ -24,41 +24,41 @@ def parse_ticker_input(ticker_input: Union[str, List[str]]) -> List[str]:
     - Division operations: "AAPL/XLK"
     - Mixed: ["AAPL", "AAPL/XLK", "TW.L"]
     - Quoted strings with spaces/commas: "ABC, DEF" (preserved as single token by shell)
-    
+
     Args:
         ticker_input: Either a single string or list of strings from CLI arguments
-        
+
     Returns:
         List of ticker symbols or expressions (e.g., ["AAPL", "TSLA", "AAPL/XLK"])
     """
     if ticker_input is None:
         return []
-    
+
     # If it's already a list (from multiple CLI arguments), process each element
     if isinstance(ticker_input, list):
         tickers = []
         for item in ticker_input:
             # Each item might still contain commas or be a complex expression
-            if ',' in item:
+            if "," in item:
                 # Split by comma and add each part
-                tickers.extend([t.strip() for t in item.split(',') if t.strip()])
+                tickers.extend([t.strip() for t in item.split(",") if t.strip()])
             else:
                 # Keep as-is (might be a division expression or simple ticker)
                 item = item.strip()
                 if item:
                     tickers.append(item)
         return tickers
-    
+
     # If it's a single string, split by commas
     if isinstance(ticker_input, str):
         ticker_input = ticker_input.strip()
         if not ticker_input:
             return []
-        
+
         # Split by comma and strip whitespace
-        tickers = [t.strip() for t in ticker_input.split(',') if t.strip()]
+        tickers = [t.strip() for t in ticker_input.split(",") if t.strip()]
         return tickers
-    
+
     return []
 
 
@@ -132,45 +132,45 @@ def parse_interval(interval="1d"):
 
 def download_ohlcv_data(ticker, since, interval="1d"):
     """Download OHLCV (Open, High, Low, Close, Volume) data from Yahoo Finance
-    
+
     Args:
         ticker: Single ticker symbol (e.g., "AAPL")
         since: Start date (datetime object or None for max)
         interval: Data interval (e.g., "1d", "1wk", "1mo")
-        
+
     Returns:
         DataFrame with columns: Open, High, Low, Close, Volume
         Index is DatetimeIndex
     """
     if yfinance is None:
         raise ImportError("yfinance package is required for ticker data functionality")
-    
+
     interval = parse_interval(interval)
-    
+
     # Only pass start parameter if since is not None
     kwargs = {"interval": interval, "auto_adjust": False}
     if since is not None:
         kwargs["start"] = since
-    
+
     # Download OHLCV data for the ticker
     ticker_obj = yfinance.Ticker(ticker)
     df = ticker_obj.history(**kwargs)
-    
+
     # Return only the OHLCV columns we need
     # yfinance returns: Open, High, Low, Close, Volume (and sometimes Dividends, Stock Splits)
-    ohlcv_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+    ohlcv_columns = ["Open", "High", "Low", "Close", "Volume"]
     return df[ohlcv_columns]
 
 
 def download_ticker_data(ticker, since, interval="1d"):
     """Download data from Yahoo Finance
-    
+
     Supports:
     - Single ticker: "AAPL"
     - Comma-separated: "AAPL,TSLA"
     - List of tickers: ["AAPL", "TSLA"]
     - Division operations: "AAPL/XLK" or ["AAPL/XLK"]
-    
+
     Division operations create a new column with the ratio of the two tickers.
     """
     if yfinance is None:
@@ -178,30 +178,30 @@ def download_ticker_data(ticker, since, interval="1d"):
 
     # Parse ticker input
     tickers = parse_ticker_input(ticker)
-    
+
     # Separate division expressions from regular tickers
     division_expressions = []
     regular_tickers = []
-    
+
     for t in tickers:
-        if '/' in t:
+        if "/" in t:
             division_expressions.append(t)
             # Extract the component tickers from the division expression
-            parts = t.split('/')
+            parts = t.split("/")
             for part in parts:
                 part = part.strip()
                 if part:
                     regular_tickers.append(part)
         else:
             regular_tickers.append(t)
-    
+
     # Remove duplicates while preserving order
     regular_tickers = list(dict.fromkeys(regular_tickers))
-    
+
     # Add SPY if only one regular ticker (not counting division expressions)
     if len(regular_tickers) == 1 and not division_expressions:
         regular_tickers.append("SPY")
-    
+
     interval = parse_interval(interval)
 
     # Only pass start parameter if since is not None
@@ -212,21 +212,21 @@ def download_ticker_data(ticker, since, interval="1d"):
     # Download data for regular tickers
     df = yfinance.download(regular_tickers, **kwargs)["Adj Close"]
     assert isinstance(df, pd.DataFrame), f"Expected DataFrame from yfinance.download for {regular_tickers}"
-    
+
     # Process division expressions
     for expr in division_expressions:
-        parts = expr.split('/')
+        parts = expr.split("/")
         if len(parts) == 2:
             numerator = parts[0].strip()
             denominator = parts[1].strip()
-            
+
             if numerator in df.columns and denominator in df.columns:
                 # Create new column with the division result
                 df[expr] = df[numerator] / df[denominator]
             else:
                 # If one of the tickers is missing, log a warning but continue
                 print(f"Warning: Could not create division column '{expr}' - missing ticker data")
-    
+
     return df
 
 
@@ -444,28 +444,34 @@ def calculate_cagr_to_breakeven(spot_price: float, strike: float, option_price: 
     return cagr
 
 
-def calculate_put_annualized_return(spot_price: float, option_price: float, dte: int) -> float:
+def calculate_put_annualized_return(strike_price: float, option_price: float, dte: int) -> float:
     """Calculate annualized return for put options
 
-    Formula: (price / (spot - price)) * 365 / dte
+    Formula: premium / capital_at_risk * 365 / dte
+    where capital_at_risk = strike - premium
     """
     if dte <= 0 or option_price <= 0:
         return 0.0
 
-    denominator = spot_price - option_price
-    if denominator <= 0:
+    capital_at_risk = strike_price - option_price
+    if capital_at_risk <= 0:
         return 0.0
 
-    return (option_price / denominator) * 365 / dte
+    return (option_price / capital_at_risk) * 365 / dte
 
 
-def calculate_black_scholes_delta(spot_price: float, strike: float, time_to_expiry: float, 
-                                  risk_free_rate: float = 0.05, volatility: float = 0.30,
-                                  option_type: str = "call") -> float:
+def calculate_black_scholes_delta(
+    spot_price: float,
+    strike: float,
+    time_to_expiry: float,
+    risk_free_rate: float = 0.05,
+    volatility: float = 0.30,
+    option_type: str = "call",
+) -> float:
     """Calculate Black-Scholes delta for an option
-    
+
     Delta measures the rate of change of option price with respect to stock price.
-    
+
     Args:
         spot_price: Current stock price (S)
         strike: Strike price (K)
@@ -473,20 +479,21 @@ def calculate_black_scholes_delta(spot_price: float, strike: float, time_to_expi
         risk_free_rate: Risk-free interest rate (r), default 5%
         volatility: Implied volatility (σ), default 30%
         option_type: 'call' or 'calls' or 'put' or 'puts'
-        
+
     Returns:
         Delta value (0 to 1 for calls, -1 to 0 for puts)
     """
     from scipy.stats import norm
     from math import log, sqrt
-    
+
     if spot_price <= 0 or strike <= 0 or time_to_expiry <= 0:
         return 0.0
-    
+
     # Calculate d1 from Black-Scholes formula
-    d1 = (log(spot_price / strike) + (risk_free_rate + 0.5 * volatility ** 2) * time_to_expiry) / \
-         (volatility * sqrt(time_to_expiry))
-    
+    d1 = (log(spot_price / strike) + (risk_free_rate + 0.5 * volatility**2) * time_to_expiry) / (
+        volatility * sqrt(time_to_expiry)
+    )
+
     # Delta for call: N(d1)
     # Delta for put: N(d1) - 1
     if option_type.lower() in ["call", "calls"]:
@@ -495,9 +502,15 @@ def calculate_black_scholes_delta(spot_price: float, strike: float, time_to_expi
         return norm.cdf(d1) - 1
 
 
-def calculate_implied_leverage(spot_price: float, option_price: float, strike: float,
-                               time_to_expiry: float, option_type: str = "call",
-                               risk_free_rate: float = 0.05, volatility: float = 0.30) -> float:
+def calculate_implied_leverage(
+    spot_price: float,
+    option_price: float,
+    strike: float,
+    time_to_expiry: float,
+    option_type: str = "call",
+    risk_free_rate: float = 0.05,
+    volatility: float = 0.30,
+) -> float:
     """Calculate implied leverage (Omega) for an option
 
     Formula: Ω = Δ × (S / O)
@@ -530,12 +543,11 @@ def calculate_implied_leverage(spot_price: float, option_price: float, strike: f
         return 0.0
 
     # Calculate delta using Black-Scholes
-    delta = calculate_black_scholes_delta(spot_price, strike, time_to_expiry, 
-                                          risk_free_rate, volatility, option_type)
-    
+    delta = calculate_black_scholes_delta(spot_price, strike, time_to_expiry, risk_free_rate, volatility, option_type)
+
     # Omega = Delta × (S / O)
     leverage = abs(delta) * (spot_price / option_price)
-    
+
     return leverage
 
 
@@ -659,7 +671,7 @@ def format_options_for_display(
         filter_ast: Parsed filter AST for advanced filtering (optional)
     """
     from scipy import stats
-    
+
     options_data = fetch_options_data(ticker)
 
     if not options_data:
@@ -717,7 +729,7 @@ def format_options_for_display(
                 return_metric = calculate_cagr_to_breakeven(spot_price, strike, last_price, dte)
                 return_str = f"{return_metric:.2%}"
             elif option_type == "puts" and last_price > 0:
-                return_metric = calculate_put_annualized_return(spot_price, last_price, dte)
+                return_metric = calculate_put_annualized_return(strike, last_price, dte)
                 return_str = f"{return_metric:.2%}"
             else:
                 # No valid price for calculation - display N/A and set metric to None
@@ -735,8 +747,7 @@ def format_options_for_display(
                 if implied_vol and implied_vol > 0:
                     # Use actual market implied volatility
                     leverage = calculate_implied_leverage(
-                        spot_price, last_price, strike, time_to_expiry_years, option_type,
-                        volatility=implied_vol
+                        spot_price, last_price, strike, time_to_expiry_years, option_type, volatility=implied_vol
                     )
                 # If no implied volatility available, leverage remains None (will display as N/A)
 
@@ -752,32 +763,34 @@ def format_options_for_display(
                 raw_efficiency = leverage / return_metric
 
             # Store option data for first pass
-            raw_options.append({
-                "ticker": ticker,
-                "strike": strike,
-                "dte": dte,
-                "volume": volume,
-                "price": last_price,
-                "return_metric": return_metric,
-                "return_str": return_str,
-                "leverage": leverage,
-                "strike_pct": strike_pct,
-                "lt_days": lt_days,
-                "raw_efficiency": raw_efficiency,
-                "option_type": option_type,
-            })
+            raw_options.append(
+                {
+                    "ticker": ticker,
+                    "strike": strike,
+                    "dte": dte,
+                    "volume": volume,
+                    "price": last_price,
+                    "return_metric": return_metric,
+                    "return_str": return_str,
+                    "leverage": leverage,
+                    "strike_pct": strike_pct,
+                    "lt_days": lt_days,
+                    "raw_efficiency": raw_efficiency,
+                    "option_type": option_type,
+                }
+            )
 
     # Second pass: calculate efficiency percentiles
     valid_efficiencies = [opt["raw_efficiency"] for opt in raw_options if opt["raw_efficiency"] is not None]
-    
+
     # Build final formatted options with efficiency percentiles
     formatted_options = []
     for opt in raw_options:
         # Calculate efficiency percentile (0-100)
         efficiency = None
         if opt["raw_efficiency"] is not None and len(valid_efficiencies) > 0:
-            efficiency = stats.percentileofscore(valid_efficiencies, opt["raw_efficiency"], kind='rank')
-        
+            efficiency = stats.percentileofscore(valid_efficiencies, opt["raw_efficiency"], kind="rank")
+
         # Create option data dict for filtering
         # Field aliases: ret/ar for return, sp for strike_pct, lt_days for last trade days, lev for leverage, eff for efficiency
         option_data = {
@@ -795,33 +808,35 @@ def format_options_for_display(
             "efficiency": efficiency,
             "eff": efficiency,
         }
-        
+
         # Apply filter_ast if provided
         if filter_ast and not evaluate_filter(filter_ast, option_data):
             continue
-        
+
         # Format display string
         option_type_letter = "C" if opt["option_type"] == "calls" else "P"
-        leverage_str = f"{opt['leverage']:.1f}x" if opt['leverage'] and opt['leverage'] > 0 else "N/A"
+        leverage_str = f"{opt['leverage']:.1f}x" if opt["leverage"] and opt["leverage"] > 0 else "N/A"
         efficiency_str = f"{efficiency:.0f}" if efficiency is not None else "N/A"
-        
+
         formatted_option = (
             f"{opt['ticker'].upper()} {opt['strike']:.0f}{option_type_letter} {opt['dte']}DTE "
             f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str})"
         )
-        
+
         # Store for sorting
-        formatted_options.append({
-            "display": formatted_option,
-            "strike": opt["strike"],
-            "dte": opt["dte"],
-            "volume": opt["volume"],
-            "price": opt["price"],
-            "return_metric": opt["return_metric"],
-            "leverage": opt["leverage"],
-            "efficiency": efficiency,
-        })
-    
+        formatted_options.append(
+            {
+                "display": formatted_option,
+                "strike": opt["strike"],
+                "dte": opt["dte"],
+                "volume": opt["volume"],
+                "price": opt["price"],
+                "return_metric": opt["return_metric"],
+                "leverage": opt["leverage"],
+                "efficiency": efficiency,
+            }
+        )
+
     # Sort based on the specified criteria
     if sort_by == "strike":
         formatted_options.sort(key=lambda x: x["strike"])
@@ -833,12 +848,14 @@ def format_options_for_display(
         # For calls: ascending (smallest to largest return)
         # For puts: descending (largest to smallest return)
         if option_type == "calls":
-            formatted_options.sort(key=lambda x: x["return_metric"] if x["return_metric"] is not None else float('inf'))
+            formatted_options.sort(key=lambda x: x["return_metric"] if x["return_metric"] is not None else float("inf"))
         else:  # puts
-            formatted_options.sort(key=lambda x: x["return_metric"] if x["return_metric"] is not None else float('-inf'), reverse=True)
+            formatted_options.sort(
+                key=lambda x: x["return_metric"] if x["return_metric"] is not None else float("-inf"), reverse=True
+            )
     elif sort_by == "efficiency":
         # Sort by efficiency percentile (highest first)
         formatted_options.sort(key=lambda x: x["efficiency"] if x["efficiency"] is not None else -1, reverse=True)
-    
+
     # Return just the display strings
     return [option["display"] for option in formatted_options]
