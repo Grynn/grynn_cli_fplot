@@ -902,7 +902,7 @@ def format_options_for_display(
         expiry_fmt = f"{expiry_dt.strftime('%d/%b/%y')} ({opt['dte']}d)"
 
         breakeven = opt["strike"] - opt["price"]
-        be_pct = (breakeven / opt["strike"] - 1) * 100 if opt["strike"] > 0 else 0
+        be_pct = (breakeven / spot_price - 1) * 100 if spot_price > 0 else 0
         be_str = f"${breakeven:.2f} ({be_pct:+.1f}%)"
 
         lt_str = f"{opt['lt_days']}d" if opt["lt_days"] is not None else "-"
