@@ -777,6 +777,7 @@ def format_options_for_display(
                 raw_efficiency = leverage / return_metric
 
             # Store option data for first pass
+            implied_vol = option.get("impliedVolatility", None)
             raw_options.append(
                 {
                     "ticker": ticker,
@@ -789,6 +790,7 @@ def format_options_for_display(
                     "ask": ask_price,
                     "ar_bid": ar_bid,
                     "ar_ask": ar_ask,
+                    "iv": implied_vol,
                     "return_metric": return_metric,
                     "return_str": return_str,
                     "leverage": leverage,
@@ -862,6 +864,7 @@ def format_options_for_display(
                 "ar_bid": opt.get("ar_bid"),
                 "ar_ask": opt.get("ar_ask"),
                 "lt_days": opt.get("lt_days"),
+                "iv": opt.get("iv"),
             }
         )
 
@@ -893,7 +896,7 @@ def format_options_for_display(
     lines = [f"spot = ${spot_price:.2f}", ""]
 
     # Table header
-    header = f"{'Expiry':<20} {'Strike':>7} {'Breakeven':>16} {'LT':>4} {'AR (bid / ask / last)':>30}"
+    header = f"{'Expiry':<20} {'Strike':>7} {'Breakeven':>16} {'Vol':>6} {'IV':>6} {'LT':>4}  {'AR: ask / bid / last'}"
     lines.append(header)
     lines.append("-" * len(header))
 
@@ -905,14 +908,22 @@ def format_options_for_display(
         be_pct = (breakeven / spot_price - 1) * 100 if spot_price > 0 else 0
         be_str = f"${breakeven:.2f} ({be_pct:+.1f}%)"
 
+        vol_str = f"{opt['volume']}" if opt["volume"] else "-"
+        iv_str = f"{opt['iv']:.0%}" if opt.get("iv") else "-"
         lt_str = f"{opt['lt_days']}d" if opt["lt_days"] is not None else "-"
 
-        ar_bid_str = f"{opt['ar_bid']:.0%}" if opt["ar_bid"] else "-"
-        ar_ask_str = f"{opt['ar_ask']:.0%}" if opt["ar_ask"] else "-"
-        ar_last_str = f"{opt['return_metric']:.0%}" if opt["return_metric"] else "-"
-        ar_str = f"bid:{ar_bid_str} ask:{ar_ask_str} last:{ar_last_str}"
+        # AR with premium values: ask: $X.XX (YY%) | bid: $X.XX (YY%) | last: $X.XX (YY%)
+        def _ar_cell(price, ar):
+            if price and price > 0 and ar:
+                return f"${price:.2f} ({ar:.0%})"
+            return "-"
 
-        row = f"{expiry_fmt:<20} {opt['strike']:>7.0f} {be_str:>16} {lt_str:>4} {ar_str:>30}"
+        ar_ask = _ar_cell(opt["ask"], opt["ar_ask"])
+        ar_bid = _ar_cell(opt["bid"], opt["ar_bid"])
+        ar_last = _ar_cell(opt["price"], opt["return_metric"])
+        ar_str = f"ask: {ar_ask} | bid: {ar_bid} | last: {ar_last}"
+
+        row = f"{expiry_fmt:<20} {opt['strike']:>7.0f} {be_str:>16} {vol_str:>6} {iv_str:>6} {lt_str:>4}  {ar_str}"
         lines.append(row)
 
     return lines

@@ -576,4 +576,15 @@ def get_filter_help() -> str:
     help_lines.append("  return>0.20, sp>5, sp<15")
     help_lines.append("    Options with return > 20%, strike 5-15% above spot")
 
+    # Named filter presets
+    help_lines.append("\n")
+    help_lines.append("Named Filter Presets:")
+    help_lines.append("-" * 50)
+    help_lines.append('  Save:    fplot --save-filter NAME --filter "EXPRESSION"')
+    help_lines.append("  Use:     fplot AAPL --put --filter NAME")
+    help_lines.append("  List:    fplot --list-filters")
+    help_lines.append("  Delete:  fplot --delete-filter NAME")
+    help_lines.append("  Default: fplot --default-filter NAME  (applied when no --filter given)")
+    help_lines.append("  Clear:   fplot --default-filter none")
+
     return "\n".join(help_lines)

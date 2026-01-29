@@ -55,6 +55,10 @@ except importlib.metadata.PackageNotFoundError:
     help="Filter expression (e.g., 'dte>300', 'dte>10, dte<15', 'dte>300 + strike<100')",
 )
 @click.option("--filter-help", is_flag=True, help="Show help for filter expressions and exit")
+@click.option("--save-filter", type=str, default=None, help="Save --filter expression with this name for reuse")
+@click.option("--list-filters", is_flag=True, help="List all saved filter presets")
+@click.option("--delete-filter", type=str, default=None, help="Delete a saved filter preset by name")
+@click.option("--default-filter", type=str, default=None, help="Set a saved filter as default (use 'none' to clear)")
 @click.option("--web", "-w", is_flag=True, help="Launch interactive web interface")
 @click.option("--port", type=int, default=8000, help="Port for web interface")
 @click.option("--host", type=str, default="127.0.0.1", help="Host for web interface")
@@ -72,6 +76,10 @@ def display_plot(
     show_all,
     filter_expr,
     filter_help,
+    save_filter,
+    list_filters,
+    delete_filter,
+    default_filter,
     web,
     port,
     host,
@@ -140,6 +148,57 @@ def display_plot(
         print(get_filter_help())
         return
 
+    # Handle named filter management commands
+    if list_filters:
+        from grynn_fplot.filter_store import load_filters, get_default_filter
+
+        filters = load_filters()
+        default_name = get_default_filter()
+        if not filters:
+            click.echo('No saved filters. Save one with: fplot --save-filter NAME --filter "EXPRESSION"')
+        else:
+            click.echo("Saved filters:")
+            for name, expr in sorted(filters.items()):
+                marker = " (default)" if name == default_name else ""
+                click.echo(f"  {name}: {expr}{marker}")
+        return
+
+    if delete_filter:
+        from grynn_fplot.filter_store import delete_filter as do_delete
+
+        if do_delete(delete_filter):
+            click.echo(f"Deleted filter '{delete_filter}'.")
+        else:
+            click.echo(f"Filter '{delete_filter}' not found.")
+        return
+
+    if save_filter:
+        if not filter_expr:
+            click.echo("Error: --save-filter requires --filter to specify the expression to save.")
+            return
+        try:
+            from grynn_fplot.filter_store import save_filter as do_save
+
+            do_save(save_filter, filter_expr)
+            click.echo(f"Saved filter '{save_filter}': {filter_expr}")
+        except (ValueError, Exception) as e:
+            click.echo(f"Error: {e}")
+        return
+
+    if default_filter is not None:
+        from grynn_fplot.filter_store import set_default_filter, get_default_filter
+
+        try:
+            if default_filter.lower() == "none":
+                set_default_filter(None)
+                click.echo("Cleared default filter.")
+            else:
+                set_default_filter(default_filter)
+                click.echo(f"Default filter set to '{default_filter}'.")
+        except ValueError as e:
+            click.echo(f"Error: {e}")
+        return
+
     # Convert ticker tuple to list (Click's variadic arguments return a tuple)
     ticker_list = list(ticker) if ticker else []
     # Launch web interface if --web flag is used
@@ -161,13 +220,32 @@ def display_plot(
         click.echo("Hint: Use --web or -w to launch the interactive web interface.")
         return
 
-    # Validate filter expression if provided
+    # Resolve filter: named preset, inline expression, or default
     parsed_filter = None
-    if filter_expr:
+    effective_filter_expr = filter_expr
+    if not effective_filter_expr and (call or put):
+        # Apply default filter if no explicit filter provided for options
+        from grynn_fplot.filter_store import get_default_filter, resolve_filter
+
+        default_name = get_default_filter()
+        if default_name:
+            effective_filter_expr = resolve_filter(default_name)
+            if debug:
+                logger.debug(f"Using default filter '{default_name}': {effective_filter_expr}")
+    elif effective_filter_expr:
+        from grynn_fplot.filter_store import resolve_filter
+
+        resolved = resolve_filter(effective_filter_expr)
+        if resolved != effective_filter_expr:
+            if debug:
+                logger.debug(f"Resolved filter '{effective_filter_expr}' to: {resolved}")
+            effective_filter_expr = resolved
+
+    if effective_filter_expr:
         try:
             from grynn_fplot.filter_parser import parse_filter, FilterParseError
 
-            parsed_filter = parse_filter(filter_expr)
+            parsed_filter = parse_filter(effective_filter_expr)
             if debug:
                 logger.debug(f"Parsed filter: {parsed_filter}")
         except FilterParseError as e:
@@ -199,7 +277,7 @@ def display_plot(
     # This allows filters to work on all options without artificial date limits
     use_show_all = show_all
     use_max_expiry = max_expiry
-    if (filter_expr or parsed_min_dte) and not show_all:
+    if (effective_filter_expr or parsed_min_dte) and not show_all:
         # Check if max_expiry was explicitly set by the user (not just the default)
         # Since we can't easily detect if a default was used, we'll treat filter/min_dte as implying --all behavior
         # unless max is explicitly different from default or --all is already set

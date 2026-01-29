@@ -77,14 +77,14 @@ AAPL 230C 35DTE ($3.10, 25.2%, 32.3x, eff:78)
 ```
 Format: `TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile)`
 
-**Puts** display a table with spot price header, expiry, strike, breakeven, and AR computed from bid/ask/last:
+**Puts** display a table with spot price, expiry, strike, breakeven, volume, IV, and AR with premiums:
 ```
 spot = $235.50
 
-Expiry               Strike        Breakeven   LT              AR (bid / ask / last)
----------------------------------------------------------------------------
-27/Mar/25 (35d)         220   $217.85 (-1.0%)   1d     bid:20% ask:28% last:25%
-27/Mar/25 (35d)         215   $213.60 (-0.7%)   3d     bid:12% ask:18% last:15%
+Expiry               Strike        Breakeven    Vol     IV   LT  AR: ask / bid / last
+-------------------------------------------------------------------------------------
+27/Mar/25 (35d)         220   $217.85 (-7.5%)    150   32%   1d  ask: $3.50 (28%) | bid: $2.80 (20%) | last: $3.10 (25%)
+27/Mar/25 (35d)         215   $213.60 (-9.3%)     85   30%   3d  ask: $2.20 (18%) | bid: $1.60 (12%) | last: $1.90 (15%)
 ```
 
 **Return metrics:**
@@ -153,6 +153,30 @@ The `--filter` option supports complex filter expressions with logical operators
     - `--filter "dte>1y"` - Options with more than 1 year to expiry
     - `--filter "dte>6m"` - Options with more than 6 months to expiry
     - `--filter "lt_days<=7"` - Options traded in the last week
+
+**Named Filter Presets:**
+
+Save frequently used filters for quick reuse. Filters are stored in `~/.config/grynn_fplot/filters.json`.
+
+```shell
+# Save a filter
+fplot --save-filter vishal --filter "dte>7, lt_days<2d15h, sp<15, dte<33"
+
+# Use a saved filter
+fplot AAPL --put --filter vishal
+
+# List saved filters
+fplot --list-filters
+
+# Delete a saved filter
+fplot --delete-filter vishal
+
+# Set a default filter (applied when no --filter is given)
+fplot --default-filter vishal
+
+# Clear the default
+fplot --default-filter none
+```
 
 Options data is cached for 1 hour to improve performance and reduce API calls.
 
