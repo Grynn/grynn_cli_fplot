@@ -768,6 +768,7 @@ def format_options_for_display(
                     "ticker": ticker,
                     "strike": strike,
                     "dte": dte,
+                    "expiry_date": expiry_date,
                     "volume": volume,
                     "price": last_price,
                     "return_metric": return_metric,
@@ -824,9 +825,14 @@ def format_options_for_display(
                 f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str})"
             )
         else:
+            # Format expiry date as dd/Mon/yy (e.g. 27/Jan/24)
+            expiry_dt = datetime.strptime(opt["expiry_date"], "%Y-%m-%d")
+            expiry_fmt = expiry_dt.strftime("%d/%b/%y")
+            breakeven = opt["strike"] - opt["price"]
             formatted_option = (
-                f"{opt['ticker'].upper()} {opt['strike']:.0f}{option_type_letter} {opt['dte']}DTE "
-                f"(${opt['price']:.2f}, {opt['return_str']})"
+                f"{opt['ticker'].upper()} {expiry_fmt} ({opt['dte']}d) "
+                f"strike:{opt['strike']:.0f} be:{breakeven:.2f} "
+                f"${opt['price']:.2f} ar:{opt['return_str']}"
             )
 
         # Store for sorting
