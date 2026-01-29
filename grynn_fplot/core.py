@@ -815,13 +815,19 @@ def format_options_for_display(
 
         # Format display string
         option_type_letter = "C" if opt["option_type"] == "calls" else "P"
-        leverage_str = f"{opt['leverage']:.1f}x" if opt["leverage"] and opt["leverage"] > 0 else "N/A"
-        efficiency_str = f"{efficiency:.0f}" if efficiency is not None else "N/A"
 
-        formatted_option = (
-            f"{opt['ticker'].upper()} {opt['strike']:.0f}{option_type_letter} {opt['dte']}DTE "
-            f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str})"
-        )
+        if opt["option_type"] == "calls":
+            leverage_str = f"{opt['leverage']:.1f}x" if opt["leverage"] and opt["leverage"] > 0 else "N/A"
+            efficiency_str = f"{efficiency:.0f}" if efficiency is not None else "N/A"
+            formatted_option = (
+                f"{opt['ticker'].upper()} {opt['strike']:.0f}{option_type_letter} {opt['dte']}DTE "
+                f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str})"
+            )
+        else:
+            formatted_option = (
+                f"{opt['ticker'].upper()} {opt['strike']:.0f}{option_type_letter} {opt['dte']}DTE "
+                f"(${opt['price']:.2f}, {opt['return_str']})"
+            )
 
         # Store for sorting
         formatted_options.append(

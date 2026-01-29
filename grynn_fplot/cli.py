@@ -82,9 +82,13 @@ def display_plot(
     When --call or --put flags are used, lists available options contracts
     in a format suitable for filtering with tools like fzf.
 
-    Output format: TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric)
-    - For calls: return_metric is CAGR to breakeven
-    - For puts: return_metric is annualized return
+    Output format:
+    - Calls: TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile)
+    - Puts:  TICKER STRIKE_P DTE (price, AR)
+
+    Return metrics:
+    - Calls: CAGR to breakeven
+    - Puts: AR = premium / capital-at-risk, annualized (capital-at-risk = strike - premium)
 
     Examples:
     \b

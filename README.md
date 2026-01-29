@@ -68,16 +68,27 @@ Examples:
 - `fplot AAPL --call --filter "dte>10, dte<50"`  # 10-50 days to expiry
 - `fplot AAPL --call --filter "dte>1y"`  # Options with 1+ year to expiry
 
-The options output includes pricing, return metrics, implied leverage, and efficiency:
+The output format differs for calls and puts:
+
+**Calls** include leverage and efficiency (useful for LEAPs):
 ```
 AAPL 225C 35DTE ($5.25, 18.5%, 19.0x, eff:45)
 AAPL 230C 35DTE ($3.10, 25.2%, 32.3x, eff:78)
-AAPL 235C 35DTE ($1.85, 35.1%, 54.1x, eff:92)
 ```
+Format: `TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile)`
 
-Format: `TICKER STRIKE[C|P] DAYS_TO_EXPIRY (price, return_metric, leverage, eff:percentile)`
-- For calls: return_metric is CAGR to breakeven
-- For puts: return_metric is annualized return
+**Puts** show price and annualized return:
+```
+AAPL 220P 35DTE ($2.15, 24.8%)
+AAPL 215P 35DTE ($1.40, 15.3%)
+```
+Format: `TICKER STRIKE_P DTE (price, AR)`
+
+**Return metrics:**
+- Calls: CAGR to breakeven
+- Puts: AR = premium / capital-at-risk, annualized (capital-at-risk = strike - premium)
+
+**Leverage & Efficiency (calls only):**
 - Leverage: Implied leverage (Ω = Δ × S/O) where Δ is Black-Scholes delta, S is spot price, O is option price
   - Delta calculated using actual implied volatility from Yahoo Finance
   - Shows "N/A" if implied volatility is not available
@@ -112,11 +123,11 @@ The `--filter` option supports complex filter expressions with logical operators
   - `dte`: Days to expiry
   - `volume`: Option volume
   - `price`: Last price
-  - `return`, `ret`, `ar`: Return metric (CAGR for calls, annualized return for puts) - all aliases work
+  - `return`, `ret`, `ar`: Return metric (CAGR for calls, AR for puts) - all aliases work
   - `strike_pct`, `sp`: Strike percentage above/below spot (positive = above spot, negative = below spot)
   - `lt_days`: Days since last trade (useful for filtering stale options)
-  - `leverage`, `lev`: Implied leverage (Ω = Δ × S/O, using Black-Scholes delta)
-  - `efficiency`, `eff`: Efficiency percentile (leverage/CAGR ratio, 0-100 scale)
+  - `leverage`, `lev`: Implied leverage, calls only (Ω = Δ × S/O, using Black-Scholes delta)
+  - `efficiency`, `eff`: Efficiency percentile, calls only (leverage/CAGR ratio, 0-100 scale)
 
 - **Examples:**
   - `--filter "dte>300"` - Options with more than 300 days to expiry
