@@ -402,9 +402,14 @@ def get_cached_price_data(ticker: str, interval: str = "1d"):
         if (datetime.now() - cache_time).total_seconds() < 86400:
             # Reconstruct DataFrame from cached data
             df = pd.DataFrame(cached_data["data"])
+            # The index was saved as a column (either 'Date' or 'index')
             if "Date" in df.columns:
                 df["Date"] = pd.to_datetime(df["Date"])
                 df.set_index("Date", inplace=True)
+            elif "index" in df.columns:
+                df["index"] = pd.to_datetime(df["index"])
+                df.set_index("index", inplace=True)
+                df.index.name = None  # Remove the index name
             return df
     except (json.JSONDecodeError, KeyError, ValueError, Exception):
         pass
@@ -428,8 +433,11 @@ def cache_price_data(ticker: str, df: pd.DataFrame, interval: str = "1d"):
         # Convert DataFrame to JSON-serializable format
         df_copy = df.copy()
         df_copy.reset_index(inplace=True)
-        if "Date" in df_copy.columns:
-            df_copy["Date"] = df_copy["Date"].astype(str)
+        # The index column will be named 'Date' or 'index' depending on whether it had a name
+        # Rename it to 'Date' for consistency
+        index_col = df_copy.columns[0]
+        df_copy.rename(columns={index_col: "Date"}, inplace=True)
+        df_copy["Date"] = df_copy["Date"].astype(str)
         
         cached_data = {
             "timestamp": datetime.now().isoformat(),

@@ -101,6 +101,10 @@ class TestDownloadOHLCVData(unittest.TestCase):
         """Test that download_ohlcv_data returns proper OHLCV columns."""
         from grynn_fplot.core import download_ohlcv_data
         from datetime import datetime
+        import uuid
+
+        # Use a unique ticker name to avoid cache collisions between test runs
+        unique_ticker = f"TEST_{uuid.uuid4().hex[:8].upper()}"
 
         # Create mock data
         dates = pd.date_range(start=datetime.now() - timedelta(days=10), periods=10, freq='D')
@@ -120,7 +124,7 @@ class TestDownloadOHLCVData(unittest.TestCase):
         mock_ticker_class.return_value = mock_ticker_instance
 
         # Call the function
-        result = download_ohlcv_data("AAPL", datetime.now() - timedelta(days=10), "1d")
+        result = download_ohlcv_data(unique_ticker, datetime.now() - timedelta(days=10), "1d")
 
         # Verify result
         self.assertIsInstance(result, pd.DataFrame)
