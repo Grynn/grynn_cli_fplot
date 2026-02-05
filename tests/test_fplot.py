@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timedelta
 import pandas as pd
 from unittest.mock import patch, MagicMock
-from grynn_fplot.core import parse_start_date, get_cached_price_data, cache_price_data, download_ohlcv_data
+from grynn_fplot.core import parse_start_date, get_cached_raw_data, cache_raw_data, download_ohlcv_data
 
 
 class TestParseDate(unittest.TestCase):
@@ -67,10 +67,10 @@ class TestParseDate(unittest.TestCase):
 
 
 class TestPriceDataCaching(unittest.TestCase):
-    """Test price data caching functionality"""
+    """Test raw data caching functionality"""
     
-    def test_cache_and_retrieve_price_data(self):
-        """Test that we can cache and retrieve price data"""
+    def test_cache_and_retrieve_raw_data(self):
+        """Test that we can cache and retrieve raw yfinance data"""
         # Create sample data
         dates = pd.date_range(start="2020-01-01", periods=100, freq='D')
         df = pd.DataFrame({
@@ -82,10 +82,10 @@ class TestPriceDataCaching(unittest.TestCase):
         }, index=dates)
         
         # Cache the data
-        cache_price_data("TEST_TICKER", df, "1d")
+        cache_raw_data("TEST_TICKER", df, "1d")
         
         # Retrieve the data
-        cached_df = get_cached_price_data("TEST_TICKER", "1d")
+        cached_df = get_cached_raw_data("TEST_TICKER", "1d")
         
         # Verify it was cached and retrieved correctly
         self.assertIsNotNone(cached_df)
@@ -95,7 +95,7 @@ class TestPriceDataCaching(unittest.TestCase):
     
     def test_cache_miss_returns_none(self):
         """Test that cache miss returns None"""
-        result = get_cached_price_data("NONEXISTENT_TICKER_XYZ", "1d")
+        result = get_cached_raw_data("NONEXISTENT_TICKER_XYZ", "1d")
         self.assertIsNone(result)
     
     @patch("grynn_fplot.core.yfinance.Ticker")

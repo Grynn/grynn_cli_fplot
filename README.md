@@ -210,10 +210,10 @@ fplot --put --default-filter none
 
 ## Performance & Caching
 
-**Price Data Caching**: Price data is cached for 24 hours to provide instant chart viewing:
-- Full 10-year dataset cached per ticker/interval combination
-- Eliminates network delays when re-viewing or changing time windows
+**Price Data Caching**: Raw yfinance data is cached for 5 minutes to speed up repeated runs:
+- Reduces network round-trips for quick re-runs and adjustments
 - Cache stored in `~/.cache/grynn_fplot/`
+- Short TTL ensures data stays fresh (splits, dividends are constantly updated)
 
 **Options Data Caching**: Options data is cached for 1 hour to improve performance and reduce API calls.
 
