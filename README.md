@@ -47,6 +47,30 @@ Examples:
 - `fplot AAPL --since 2020`
 - `fplot AAPL,TSLA --since "mar 2023"`
 
+#### Interactive Charts with Pre-fetched Data
+
+**Fast, Interactive Navigation**: `fplot` pre-fetches up to 10 years of historical data for instant, smooth chart navigation:
+
+- **10-year data pre-fetch**: Downloads and caches up to 10 years of price data regardless of `--since` parameter
+- **`--since` controls view window**: The `--since` parameter sets the initial view range, not the data fetch range
+- **24-hour cache**: Full dataset is cached for 24 hours for instant subsequent views
+- **No network delays**: Pan and zoom through years of data without re-fetching
+
+**Interactive Navigation** (matplotlib native features):
+- **Pan**: Click and drag to move left/right through time
+- **Zoom**: Use the zoom tool and select area, or scroll with mouse wheel
+- **Home**: Reset to initial view
+- **Hover**: Click on data points to see exact values
+
+**Speed is the #1 priority**: Minimized time from typing command to seeing the chart.
+
+Examples:
+```shell
+fplot AAPL                    # Opens chart with last 1 year (default), but 10 years cached
+fplot AAPL --since "6m"       # Opens with 6-month view, full history available for panning
+fplot AAPL --since "2020"     # Opens from 2020, can pan back to 2016 if data exists
+```
+
 ### Options Listing
 
 ```shell
@@ -184,7 +208,14 @@ fplot --call --default-filter leaps
 fplot --put --default-filter none
 ```
 
-Options data is cached for 1 hour to improve performance and reduce API calls.
+## Performance & Caching
+
+**Price Data Caching**: Raw yfinance data is cached for 5 minutes to speed up repeated runs:
+- Reduces network round-trips for quick re-runs and adjustments
+- Cache stored in `~/.cache/grynn_fplot/`
+- Short TTL ensures data stays fresh (splits, dividends are constantly updated)
+
+**Options Data Caching**: Options data is cached for 1 hour to improve performance and reduce API calls.
 
 ## Alfred Workflow
 
