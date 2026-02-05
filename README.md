@@ -198,8 +198,6 @@ Launch fplot charts directly from Alfred.
 1. Build the workflow: `make alfred`
 2. Double-click `dist/fplot.alfredworkflow` to install in Alfred
 
-Alternatively, download `fplot.alfredworkflow` from the [latest release](../../releases/latest) (if available).
-
 ### Usage
 Type in Alfred:
 - `fplot AAPL` — candlestick chart for AAPL (default 1 year)

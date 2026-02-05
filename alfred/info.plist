@@ -62,10 +62,10 @@
 <integer>102</integer>
 <key>script</key>
 <string>#!/bin/bash
-# Alfred doesn't inherit shell PATH — add common install locations
+# Alfred doesn't inherit shell PATH - add common install locations
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 # Prefer fplot on PATH (may be more recent than this workflow)
-fplot {query}</string>
+fplot "$@"</string>
 <key>scriptargtype</key>
 <integer>1</integer>
 <key>scriptfile</key>
@@ -90,10 +90,10 @@ Prerequisites:
 
 Usage:
 Type in Alfred:
-- fplot AAPL — candlestick chart for AAPL (default 1 year)
-- fplot AAPL --since 2020 — chart from 2020
-- fplot AAPL,TSLA --since "mar 2023" — comparative chart
-- fplot AAPL --call — list call options</string>
+- fplot AAPL - candlestick chart for AAPL (default 1 year)
+- fplot AAPL --since 2020 - chart from 2020
+- fplot AAPL,TSLA --since "mar 2023" - comparative chart
+- fplot AAPL --call - list call options</string>
 <key>uidata</key>
 <dict>
 <key>8E4C4C8E-5C7E-4F2D-9B3A-1E2D3C4B5A6F</key>
