@@ -29,6 +29,9 @@ jobs:
       - name: Build package
         run: uv build
 
+      - name: Build Alfred workflow
+        run: make alfred
+
       - name: Store distribution packages
         uses: actions/upload-artifact@v4
         with:
@@ -54,3 +57,22 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-release-assets:
+    name: Publish release assets
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Upload Alfred workflow to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/fplot.alfredworkflow
