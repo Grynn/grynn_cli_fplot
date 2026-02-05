@@ -186,6 +186,25 @@ fplot --put --default-filter none
 
 Options data is cached for 1 hour to improve performance and reduce API calls.
 
+## Alfred Workflow
+
+Launch fplot charts directly from Alfred.
+
+### Prerequisites
+- [Alfred](https://www.alfredapp.com/) with Powerpack
+- `fplot` installed and available on PATH (`uv tool install grynn-fplot` or `pip install grynn-fplot`)
+
+### Install
+1. Download `fplot.alfredworkflow` from the [latest release](../../releases/latest) or build it: `make alfred`
+2. Double-click the `.alfredworkflow` file to install
+
+### Usage
+Type in Alfred:
+- `fplot AAPL` — candlestick chart for AAPL (default 1 year)
+- `fplot AAPL --since 2020` — chart from 2020
+- `fplot AAPL,TSLA --since "mar 2023"` — comparative chart
+- `fplot AAPL --call` — list call options
+
 ## TODO
 
 - fplot --call | fzf lets you select a call; once a call is selected it should be possible to plot a chart for it (yfinance provides price history for option identifiers)

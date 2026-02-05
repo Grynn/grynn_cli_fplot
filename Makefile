@@ -1,4 +1,4 @@
-.PHONY: install clean test lint format coverage dev bump pre-commit pre-commit-install build publish
+.PHONY: install clean test lint format coverage dev bump pre-commit pre-commit-install build publish alfred
 
 test:
 	uv run pytest
@@ -68,3 +68,8 @@ publish: build
 	@echo "Publishing to PyPI..."
 	@echo "Note: For CI/CD, use GitHub Actions with trusted publishing instead."
 	uv publish
+
+alfred:
+	@mkdir -p dist
+	cd alfred && zip -j ../dist/fplot.alfredworkflow info.plist
+	@echo "Built dist/fplot.alfredworkflow"
