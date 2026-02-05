@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+<key>bundleid</key>
+<string>com.grynn.fplot</string>
+<key>category</key>
+<string>Tools</string>
+<key>connections</key>
+<dict>
+<key>8E4C4C8E-5C7E-4F2D-9B3A-1E2D3C4B5A6F</key>
+<array>
+<dict>
+<key>destinationuid</key>
+<string>9F5D5D9F-6D8F-5G3E-0C4B-2F3E4D5C6B7G</string>
+<key>modifiers</key>
+<integer>0</integer>
+<key>modifiersubtext</key>
+<string></string>
+<key>vitoclose</key>
+<false/>
+</dict>
+</array>
+</dict>
+<key>createdby</key>
+<string>Grynn</string>
+<key>description</key>
+<string>Launch fplot financial charts directly from Alfred</string>
+<key>disabled</key>
+<false/>
+<key>name</key>
+<string>fplot - Financial Charts</string>
+<key>objects</key>
+<array>
+<dict>
+<key>config</key>
+<dict>
+<key>argumenttype</key>
+<integer>0</integer>
+<key>keyword</key>
+<string>fplot</string>
+<key>subtext</key>
+<string>Plot financial charts: fplot AAPL --since 2020</string>
+<key>text</key>
+<string>Financial Chart</string>
+<key>withspace</key>
+<true/>
+</dict>
+<key>type</key>
+<string>alfred.workflow.input.keyword</string>
+<key>uid</key>
+<string>8E4C4C8E-5C7E-4F2D-9B3A-1E2D3C4B5A6F</string>
+<key>version</key>
+<integer>1</integer>
+</dict>
+<dict>
+<key>config</key>
+<dict>
+<key>concurrently</key>
+<false/>
+<key>escaping</key>
+<integer>102</integer>
+<key>script</key>
+<string>#!/bin/bash
+# Alfred doesn't inherit shell PATH - add common install locations
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+# Prefer fplot on PATH (may be more recent than this workflow)
+fplot "$@"</string>
+<key>scriptargtype</key>
+<integer>1</integer>
+<key>scriptfile</key>
+<string></string>
+<key>type</key>
+<integer>0</integer>
+</dict>
+<key>type</key>
+<string>alfred.workflow.action.script</string>
+<key>uid</key>
+<string>9F5D5D9F-6D8F-5G3E-0C4B-2F3E4D5C6B7G</string>
+<key>version</key>
+<integer>2</integer>
+</dict>
+</array>
+<key>readme</key>
+<string>Launch fplot charts directly from Alfred.
+
+Prerequisites:
+- Alfred with Powerpack
+- fplot installed on PATH (uv tool install grynn-fplot or pip install grynn-fplot)
+
+Usage:
+Type in Alfred:
+- fplot AAPL - candlestick chart for AAPL (default 1 year)
+- fplot AAPL --since 2020 - chart from 2020
+- fplot AAPL,TSLA --since "mar 2023" - comparative chart
+- fplot AAPL --call - list call options</string>
+<key>uidata</key>
+<dict>
+<key>8E4C4C8E-5C7E-4F2D-9B3A-1E2D3C4B5A6F</key>
+<dict>
+<key>xpos</key>
+<integer>120</integer>
+<key>ypos</key>
+<integer>120</integer>
+</dict>
+<key>9F5D5D9F-6D8F-5G3E-0C4B-2F3E4D5C6B7G</key>
+<dict>
+<key>xpos</key>
+<integer>320</integer>
+<key>ypos</key>
+<integer>120</integer>
+</dict>
+</dict>
+<key>version</key>
+<string>1.0.0</string>
+<key>webaddress</key>
+<string>https://github.com/Grynn/grynn_cli_fplot</string>
+</dict>
+</plist>
