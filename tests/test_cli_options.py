@@ -29,7 +29,9 @@ class TestCliOptions(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("AAPL 150C 30DTE", result.output)
         self.assertIn("AAPL 155C 30DTE", result.output)
-        mock_format.assert_called_once_with("AAPL", "calls", max_expiry="6m", min_dte=None, show_all=False, filter_ast=None)
+        mock_format.assert_called_once_with(
+            "AAPL", "calls", max_expiry="6m", min_dte=None, show_all=False, filter_ast=None
+        )
 
     @patch("grynn_fplot.cli.format_options_for_display")
     def test_call_flag_no_options(self, mock_format):
@@ -40,8 +42,9 @@ class TestCliOptions(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("No call options found", result.output)
 
+    @patch("grynn_fplot.filter_store.get_default_filter", return_value=None)
     @patch("grynn_fplot.cli.format_options_for_display")
-    def test_put_flag_with_options(self, mock_format):
+    def test_put_flag_with_options(self, mock_format, _mock_default):
         """Test --put flag with available options"""
         mock_format.return_value = ["AAPL 150P 30DTE ($3.50, 8.2%)", "AAPL 145P 30DTE ($2.00, 12.1%)"]
 
@@ -49,7 +52,9 @@ class TestCliOptions(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("AAPL 150P 30DTE", result.output)
         self.assertIn("AAPL 145P 30DTE", result.output)
-        mock_format.assert_called_once_with("AAPL", "puts", max_expiry="6m", min_dte=None, show_all=False, filter_ast=None)
+        mock_format.assert_called_once_with(
+            "AAPL", "puts", max_expiry="6m", min_dte=None, show_all=False, filter_ast=None
+        )
 
     @patch("grynn_fplot.cli.format_options_for_display")
     def test_put_flag_no_options(self, mock_format):
@@ -67,7 +72,9 @@ class TestCliOptions(unittest.TestCase):
 
         result = self.runner.invoke(display_plot, ["AAPL", "--call", "--max", "3m"])
         self.assertEqual(result.exit_code, 0)
-        mock_format.assert_called_once_with("AAPL", "calls", max_expiry="3m", min_dte=None, show_all=False, filter_ast=None)
+        mock_format.assert_called_once_with(
+            "AAPL", "calls", max_expiry="3m", min_dte=None, show_all=False, filter_ast=None
+        )
 
     @patch("grynn_fplot.cli.format_options_for_display")
     def test_all_flag(self, mock_format):
@@ -76,7 +83,9 @@ class TestCliOptions(unittest.TestCase):
 
         result = self.runner.invoke(display_plot, ["AAPL", "--call", "--all"])
         self.assertEqual(result.exit_code, 0)
-        mock_format.assert_called_once_with("AAPL", "calls", max_expiry="6m", min_dte=None, show_all=True, filter_ast=None)
+        mock_format.assert_called_once_with(
+            "AAPL", "calls", max_expiry="6m", min_dte=None, show_all=True, filter_ast=None
+        )
 
     @patch("grynn_fplot.cli.format_options_for_display")
     def test_min_dte_flag(self, mock_format):
@@ -85,7 +94,9 @@ class TestCliOptions(unittest.TestCase):
 
         result = self.runner.invoke(display_plot, ["AAPL", "--call", "--min-dte", "300", "--all"])
         self.assertEqual(result.exit_code, 0)
-        mock_format.assert_called_once_with("AAPL", "calls", max_expiry="6m", min_dte=300, show_all=True, filter_ast=None)
+        mock_format.assert_called_once_with(
+            "AAPL", "calls", max_expiry="6m", min_dte=300, show_all=True, filter_ast=None
+        )
 
     @patch("grynn_fplot.cli.format_options_for_display")
     def test_filter_flag_simple(self, mock_format):

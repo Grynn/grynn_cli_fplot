@@ -132,7 +132,7 @@ def parse_interval(interval="1d"):
 
 def download_ohlcv_data(ticker, since, interval="1d"):
     """Download OHLCV (Open, High, Low, Close, Volume) data from Yahoo Finance
-    
+
     Pre-fetches 10 years of data for smooth interactive viewing. The raw yfinance
     output is cached for 5 minutes. The 'since' parameter filters the view window.
 
@@ -150,27 +150,27 @@ def download_ohlcv_data(ticker, since, interval="1d"):
         raise ImportError("yfinance package is required for ticker data functionality")
 
     interval = parse_interval(interval)
-    
+
     # Try to get cached raw data first (5 minute cache)
     df_full = get_cached_raw_data(ticker, interval)
-    
+
     if df_full is None or df_full.empty:
         # Cache miss: fetch 10 years of data from Yahoo Finance
         fetch_since = datetime.now() - relativedelta(years=10)
-        
+
         kwargs = {"interval": interval, "auto_adjust": False, "start": fetch_since}
 
         # Download OHLCV data for the ticker
         ticker_obj = yfinance.Ticker(ticker)
         df_full = ticker_obj.history(**kwargs)
-        
+
         # Cache the raw yfinance output
         cache_raw_data(ticker, df_full, interval)
-    
+
     # Return only the OHLCV columns we need
     ohlcv_columns = ["Open", "High", "Low", "Close", "Volume"]
     df_full = df_full[ohlcv_columns]
-    
+
     # Filter to the requested view window for return
     if since is not None:
         # Make since timezone-aware if the index is timezone-aware
@@ -181,13 +181,13 @@ def download_ohlcv_data(ticker, since, interval="1d"):
         df = df_full[df_full.index >= filter_since - pd.Timedelta(seconds=1)]
     else:
         df = df_full
-    
+
     return df
 
 
 def download_ticker_data(ticker, since, interval="1d"):
     """Download data from Yahoo Finance
-    
+
     Pre-fetches 10 years of data for smooth interactive viewing. The raw yfinance
     output is cached for 5 minutes per ticker. The 'since' parameter filters the view window.
 
@@ -229,12 +229,12 @@ def download_ticker_data(ticker, since, interval="1d"):
         regular_tickers.append("SPY")
 
     interval = parse_interval(interval)
-    
+
     # Try to get cached raw data first (5 minute cache)
     # Generate a cache key based on all tickers involved
     cache_key = ",".join(sorted(regular_tickers + division_expressions))
     df_full = get_cached_raw_data(cache_key, interval)
-    
+
     if df_full is None or df_full.empty:
         # Cache miss: fetch 10 years of data from Yahoo Finance
         fetch_since = datetime.now() - relativedelta(years=10)
@@ -247,7 +247,7 @@ def download_ticker_data(ticker, since, interval="1d"):
 
         # Cache the raw yfinance output
         cache_raw_data(cache_key, df_full, interval)
-    
+
     # Process division expressions (these are fast, no need to cache)
     for expr in division_expressions:
         parts = expr.split("/")
@@ -261,7 +261,7 @@ def download_ticker_data(ticker, since, interval="1d"):
             else:
                 # If one of the tickers is missing, log a warning but continue
                 print(f"Warning: Could not create division column '{expr}' - missing ticker data")
-    
+
     # Filter to the requested view window for return
     if since is not None:
         # Make since timezone-aware if the index is timezone-aware
@@ -346,25 +346,25 @@ def get_cache_dir():
 
 def get_cached_raw_data(ticker: str, interval: str = "1d"):
     """Get cached raw yfinance data if it exists and is recent (< 5 minutes old)
-    
+
     Args:
         ticker: Single ticker symbol (e.g., "AAPL") or expression (e.g., "AAPL/XLK")
         interval: Data interval (e.g., "1d", "1wk", "1mo")
-        
+
     Returns:
         DataFrame with cached data or None if not available/expired
     """
     # Sanitize ticker for filename (replace / with _)
     safe_ticker = ticker.upper().replace("/", "_")
     cache_file = get_cache_dir() / f"{safe_ticker}_{interval}_raw.json"
-    
+
     if not cache_file.exists():
         return None
-    
+
     try:
         with open(cache_file, "r") as f:
             cached_data = json.load(f)
-        
+
         # Check if cache is less than 5 minutes old (300 seconds)
         cache_time = datetime.fromisoformat(cached_data["timestamp"])
         if (datetime.now() - cache_time).total_seconds() < 300:
@@ -372,22 +372,22 @@ def get_cached_raw_data(ticker: str, interval: str = "1d"):
             df = pd.DataFrame(cached_data["data"])
             # The index was saved as a column (either 'Date' or 'index')
             if "Date" in df.columns:
-                df["Date"] = pd.to_datetime(df["Date"])
+                df["Date"] = pd.to_datetime(df["Date"], utc=True)
                 df.set_index("Date", inplace=True)
             elif "index" in df.columns:
-                df["index"] = pd.to_datetime(df["index"])
+                df["index"] = pd.to_datetime(df["index"], utc=True)
                 df.set_index("index", inplace=True)
                 df.index.name = None  # Remove the index name
             return df
     except (json.JSONDecodeError, KeyError, ValueError, Exception):
         pass
-    
+
     return None
 
 
 def cache_raw_data(ticker: str, df: pd.DataFrame, interval: str = "1d"):
     """Cache raw yfinance data for a ticker (5 minute TTL)
-    
+
     Args:
         ticker: Single ticker symbol (e.g., "AAPL") or expression
         df: DataFrame with raw data from yfinance
@@ -396,7 +396,7 @@ def cache_raw_data(ticker: str, df: pd.DataFrame, interval: str = "1d"):
     # Sanitize ticker for filename (replace / with _)
     safe_ticker = ticker.upper().replace("/", "_")
     cache_file = get_cache_dir() / f"{safe_ticker}_{interval}_raw.json"
-    
+
     try:
         # Convert DataFrame to JSON-serializable format
         df_copy = df.copy()
@@ -406,12 +406,9 @@ def cache_raw_data(ticker: str, df: pd.DataFrame, interval: str = "1d"):
         index_col = df_copy.columns[0]
         df_copy.rename(columns={index_col: "Date"}, inplace=True)
         df_copy["Date"] = df_copy["Date"].astype(str)
-        
-        cached_data = {
-            "timestamp": datetime.now().isoformat(),
-            "data": df_copy.to_dict(orient="records")
-        }
-        
+
+        cached_data = {"timestamp": datetime.now().isoformat(), "data": df_copy.to_dict(orient="records")}
+
         with open(cache_file, "w") as f:
             json.dump(cached_data, f)
     except Exception:

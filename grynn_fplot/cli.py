@@ -444,52 +444,98 @@ def launch_web_interface(ticker, since, interval, port, host, no_browser, debug)
         return
 
 
+def _add_scroll_zoom(fig, axes, date_index):
+    """Add mouse-wheel zoom and date-aware x-axis ticks to a chart.
+
+    Args:
+        fig: matplotlib Figure
+        axes: list of Axes (mplfinance returns multiple: price, volume, etc.)
+        date_index: pandas DatetimeIndex for the data
+    """
+    import matplotlib.ticker as mticker
+
+    # Custom formatter: map integer x-position → date string
+    dates = date_index.to_pydatetime() if hasattr(date_index, "to_pydatetime") else list(date_index)
+
+    def _format_date(x, pos=None):
+        ix = int(round(x))
+        if 0 <= ix < len(dates):
+            d = dates[ix]
+            return d.strftime("%Y-%m-%d")
+        return ""
+
+    for ax in axes:
+        ax.xaxis.set_major_formatter(mticker.FuncFormatter(_format_date))
+
+    def _on_scroll(event):
+        if event.inaxes is None:
+            return
+        ax = axes[0]  # primary axis controls shared x
+        cur_xlim = ax.get_xlim()
+        xdata = event.xdata
+        if xdata is None:
+            xdata = (cur_xlim[0] + cur_xlim[1]) / 2
+        # Zoom factor: scroll up → zoom in, scroll down → zoom out
+        scale = 0.8 if event.button == "up" else 1.25
+        new_width = (cur_xlim[1] - cur_xlim[0]) * scale
+        # Keep the point under the cursor stationary
+        rel = (xdata - cur_xlim[0]) / (cur_xlim[1] - cur_xlim[0])
+        new_left = xdata - new_width * rel
+        new_right = xdata + new_width * (1 - rel)
+        # Clamp to data range
+        new_left = max(new_left, 0)
+        new_right = min(new_right, len(dates) - 1)
+        for ax in axes:
+            ax.set_xlim(new_left, new_right)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("scroll_event", _on_scroll)
+
+
 def display_candlestick_plot(ticker, since, interval, debug):
     """Display candlestick plot with volume and SMAs for a single ticker
-    
+
     Pre-fetches 10 years of data for smooth pan/scroll/zoom.
     The 'since' parameter controls the initial view window.
     """
+    import pandas as pd
+
     requested_since = parse_start_date(since)
 
-    # Download OHLCV data (download_ohlcv_data now pre-fetches 10 years internally)
-    # Pass None to get the full dataset for computing SMAs over the entire history
-    df_full = download_ohlcv_data(ticker, None, interval)
-    if df_full.empty:
+    # Download full dataset for computing SMAs and enabling pan/zoom
+    df = download_ohlcv_data(ticker, None, interval)
+    if df.empty:
         print(f"No data found for {ticker}.")
         return
 
-    # Calculate SMAs on the full dataset (10 years of cached data)
-    sma_50 = df_full["Close"].rolling(window=50).mean()
-    sma_200 = df_full["Close"].rolling(window=200).mean()
+    # Calculate SMAs on the full dataset
+    sma_50 = df["Close"].rolling(window=50).mean()
+    sma_200 = df["Close"].rolling(window=200).mean()
 
-    # Filter to the requested timeframe for initial display
+    # Find the integer index position for the initial view start
+    view_start_idx = 0
     if requested_since is not None:
-        # Make requested_since timezone-aware if the index is timezone-aware
         filter_since = requested_since
-        if df_full.index.tz is not None and requested_since.tzinfo is None:
-            filter_since = requested_since.replace(tzinfo=df_full.index.tz)
-        # Use >= with a small buffer to handle timestamp precision issues
-        import pandas as pd
-        df = df_full[df_full.index >= filter_since - pd.Timedelta(seconds=1)]
-        sma_50 = sma_50[sma_50.index >= filter_since - pd.Timedelta(seconds=1)]
-        sma_200 = sma_200[sma_200.index >= filter_since - pd.Timedelta(seconds=1)]
-    else:
-        df = df_full
+        index_tz = getattr(df.index, "tz", None)
+        if index_tz is not None and requested_since.tzinfo is None:
+            filter_since = requested_since.replace(tzinfo=index_tz)
+        mask = df.index >= filter_since - pd.Timedelta(seconds=1)
+        positions = np.where(mask)[0]
+        if len(positions) > 0:
+            view_start_idx = positions[0]
 
-    if df.empty:
-        print(f"No data found for {ticker} in the requested timeframe.")
-        return
+    view_count = len(df) - view_start_idx
 
     print(
         f"Generating candlestick plot for {ticker} since {requested_since.date() if requested_since else 'max'}. Interval: {interval}"
     )
-    print(f"📊 Loaded {len(df_full)} data points (up to 10 years cached)")
-    print(f"🔍 Initial view: {len(df)} data points from {df.index[0].date()} to {df.index[-1].date()}")
+    print(f"📊 Loaded {len(df)} data points (up to 10 years cached)")
+    if view_start_idx > 0:
+        print(f"🔍 Initial view: {view_count} data points — scroll to zoom, drag to pan")
 
     if debug:
         print(f"Data for {ticker}:")
-        print(f"Full dataset: {len(df_full)} rows, Display dataset: {len(df)} rows")
+        print(f"Full dataset: {len(df)} rows, View start index: {view_start_idx}")
         print(df.head())
         temp_file = tempfile.NamedTemporaryFile(suffix=".csv", delete=False)
         df.to_csv(temp_file.name)
@@ -497,12 +543,8 @@ def display_candlestick_plot(ticker, since, interval, debug):
 
     # Create additional plots list for SMAs
     add_plots = []
-
-    # Add 50-day SMA if we have enough data
     if not sma_50.isna().all():
         add_plots.append(mpf.make_addplot(sma_50, color="orange", width=1.5, label="50-day SMA"))
-
-    # Add 200-day SMA if we have enough data
     if not sma_200.isna().all():
         add_plots.append(mpf.make_addplot(sma_200, color="red", width=1.5, label="200-day SMA"))
 
@@ -516,53 +558,51 @@ def display_candlestick_plot(ticker, since, interval, debug):
     )
     s = mpf.make_mpf_style(marketcolors=mc, gridstyle=":", y_on_right=False)
 
-    # Create the plot with interactive features enabled
+    # Plot ALL data with mplfinance
     fig, axes = mpf.plot(
         df,
         type="candle",
         style=s,
         volume=True,
         addplot=add_plots if add_plots else None,
-        title=f"{ticker} - Candlestick Chart (Pan/Zoom enabled - use toolbar)",
+        title=f"{ticker} - Candlestick Chart",
         ylabel="Price",
         ylabel_lower="Volume",
         figsize=(16, 10),
-        datetime_format="%Y-%m-%d",
         xrotation=15,
         returnfig=True,
-        warn_too_much_data=10000,  # Suppress warning for large datasets
+        warn_too_much_data=10000,
     )
 
-    # Add legend for SMAs if they exist
-    if add_plots:
-        ax = axes[0]  # Main price axis
-        # Create custom legend entries
-        from matplotlib.lines import Line2D
+    # Set initial view to --since range using integer x-positions
+    if view_start_idx > 0:
+        for ax in axes:
+            ax.set_xlim(view_start_idx, len(df) - 1)
 
-        legend_elements = [
-            Line2D([0], [0], color="green", lw=2, label="Up Day"),
-            Line2D([0], [0], color="red", lw=2, label="Down Day"),
-        ]
-        if not sma_50.isna().all():
-            legend_elements.append(Line2D([0], [0], color="orange", lw=1.5, label="50-day SMA"))
-        if not sma_200.isna().all():
-            legend_elements.append(Line2D([0], [0], color="red", lw=1.5, label="200-day SMA"))
+    # Add scroll-zoom and date tick formatting
+    _add_scroll_zoom(fig, axes, df.index)
 
-        ax.legend(handles=legend_elements, loc="best")
-    
-    # Enable interactive backend and navigation toolbar
-    # The toolbar provides pan/zoom functionality
-    print("💡 Use the navigation toolbar to pan and zoom through the data")
-    print("   - Pan: Click and drag to move left/right")
-    print("   - Zoom: Use the zoom button and select area, or scroll with mouse wheel")
-    print("   - Home: Reset to initial view")
+    # Add legend
+    from matplotlib.lines import Line2D
+
+    legend_elements = [
+        Line2D([0], [0], color="green", lw=2, label="Up Day"),
+        Line2D([0], [0], color="red", lw=2, label="Down Day"),
+    ]
+    if not sma_50.isna().all():
+        legend_elements.append(Line2D([0], [0], color="orange", lw=1.5, label="50-day SMA"))
+    if not sma_200.isna().all():
+        legend_elements.append(Line2D([0], [0], color="red", lw=1.5, label="200-day SMA"))
+    axes[0].legend(handles=legend_elements, loc="best")
+
+    print("💡 Scroll to zoom, drag to pan, Home button to reset view")
 
     plt.show()
 
 
 def display_cli_plot(ticker, since, interval, debug):
     """Display plot using matplotlib (original CLI functionality)
-    
+
     Pre-fetches 10 years of data for smooth pan/scroll/zoom.
     The 'since' parameter controls the initial view window.
     """
@@ -586,16 +626,36 @@ def display_cli_plot(ticker, since, interval, debug):
     # Otherwise, continue with existing line chart logic for multi-ticker or division
     since_parsed = parse_start_date(since)
 
-    # Download and prepare data (download_ticker_data now pre-fetches 10 years internally)
-    df = download_ticker_data(ticker, since_parsed, interval)
-    if df.empty:
+    # Download ALL data (pass None) so panning/zooming reveals full history
+    df_all = download_ticker_data(ticker, None, interval)
+    if df_all.empty:
         print(f"No data found for the given tickers({ticker}).")
         return
 
-    tickers = df.columns.tolist()
-    print(f"Generating plot for {', '.join(tickers)} since {since_parsed.date()}. Interval: {interval}")
-    print("📊 Pre-fetched up to 10 years of data for smooth navigation")
-    print(f"🔍 Initial view: {len(df)} data points from {df.index[0].date()} to {df.index[-1].date()}")
+    # Determine initial view window
+    import pandas as pd
+
+    initial_view_start = None
+    if since_parsed is not None:
+        filter_since = since_parsed
+        index_tz = getattr(df_all.index, "tz", None)
+        if index_tz is not None and since_parsed.tzinfo is None:
+            filter_since = since_parsed.replace(tzinfo=index_tz)
+        df_view = df_all[df_all.index >= filter_since - pd.Timedelta(seconds=1)]
+        if not df_view.empty:
+            initial_view_start = df_view.index[0]
+        # Use the view window for metrics calculation
+        df = df_view if not df_view.empty else df_all
+    else:
+        df = df_all
+
+    tickers = df_all.columns.tolist()
+    print(
+        f"Generating plot for {', '.join(tickers)} since {since_parsed.date() if since_parsed else 'max'}. Interval: {interval}"
+    )
+    print(f"📊 Loaded {len(df_all)} data points (up to 10 years cached)")
+    if initial_view_start is not None:
+        print(f"🔍 Initial view: {len(df)} data points — pan left or zoom out to see full history")
 
     if debug:
         print(f"Data for {', '.join(tickers)}:")
@@ -615,10 +675,19 @@ def display_cli_plot(ticker, since, interval, debug):
         click.echo(tabulate(df.iloc[[-1]], headers="keys", tablefmt="pretty", showindex=False))
         df = df.iloc[:-1]  # drop the last row (this helps with plotting)
 
+    # Also clean df_all the same way
+    if df_all.iloc[-1].isna().any():
+        df_all = df_all.iloc[:-1]
+
+    # Metrics are computed on the view window (df)
     df_normalized = normalize_prices(df)
     df_dd = calculate_drawdowns(df_normalized)
     df_auc = calculate_area_under_curve(df_dd)
     df_days = (df.index[-1] - df.index[0]).days
+
+    # Normalize/drawdown the FULL dataset for plotting (so pan/zoom reveals all history)
+    df_all_normalized = normalize_prices(df_all)
+    df_all_dd = calculate_drawdowns(df_all_normalized)
 
     # Display AUC analysis in CLI
     print("\n=== Drawdown Area Under Curve Analysis ===")
@@ -644,7 +713,7 @@ def display_cli_plot(ticker, since, interval, debug):
         print(tabulate(cagr_df, headers="keys", tablefmt="pretty", showindex=False, floatfmt=".2%"))
         print(f"CAGR represents annualized return over the period {df.index[0]} to {df.index[-1]}, {df_days} days.\n")
 
-    # Prepare for plotting
+    # Prepare for plotting — plot ALL data for pan/zoom, set xlim for initial view
     auc_values = dict(zip(df_auc["Ticker"], df_auc["AUC"]))
     fig, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(16, 12), sharex=True, gridspec_kw={"height_ratios": [3, 2], "hspace": 0.3}
@@ -655,7 +724,7 @@ def display_cli_plot(ticker, since, interval, debug):
     color_iter = iter(color_map.colors)
     colors = [next(color_iter) if t != "SPY" else "darkgrey" for t in tickers]
 
-    # Plot normalized prices
+    # Plot normalized prices (full history)
     for i, ticker_name in enumerate(tickers):
         label = f"{ticker_name} - AUC: {auc_values[ticker_name]:.2f}"
         # Add CAGR to label if applicable
@@ -663,21 +732,34 @@ def display_cli_plot(ticker, since, interval, debug):
             cagr_value = cagr_df.loc[cagr_df["Ticker"] == ticker_name, "CAGR"].values[0]
             label += f" - CAGR: {cagr_value:.2%}"
 
-        ax1.plot(df_normalized.index, df_normalized[ticker_name], label=label, color=colors[i])
+        ax1.plot(df_all_normalized.index, df_all_normalized[ticker_name], label=label, color=colors[i])
 
     ax1.set_title(f"{', '.join(tickers)} Price (Pan/Zoom enabled - use toolbar)")
     ax1.set_ylabel("Normalized Price")
     ax1.legend(loc="best")
 
-    # Plot drawdowns
+    # Plot drawdowns (full history)
     for i, ticker_name in enumerate(tickers):
-        ax2.plot(df_dd.index, df_dd[ticker_name], label=f"{ticker_name} - AUC: {auc_values[ticker_name]:.2f}", color=colors[i])
-        ax2.fill_between(df_dd.index, df_dd[ticker_name], alpha=0.5, color=colors[i])
+        ax2.plot(
+            df_all_dd.index,
+            df_all_dd[ticker_name],
+            label=f"{ticker_name} - AUC: {auc_values[ticker_name]:.2f}",
+            color=colors[i],
+        )
+        ax2.fill_between(df_all_dd.index, df_all_dd[ticker_name], alpha=0.5, color=colors[i])
 
     ax2.set_title(f"{', '.join(tickers)} Drawdowns")
     ax2.set_ylabel("Drawdown")
-    ax2.set_xlabel(f"from {since_parsed.date()} to {datetime.now().date()} in {interval} intervals")
+    ax2.set_xlabel(
+        f"from {since_parsed.date() if since_parsed else df_all.index[0].date()} to {datetime.now().date()} in {interval} intervals"
+    )
     ax2.legend(loc="best")
+
+    # Set initial view xlim
+    if initial_view_start is not None:
+        import matplotlib.dates as mdates
+
+        ax1.set_xlim(mdates.date2num(initial_view_start), mdates.date2num(df_all.index[-1]))
 
     # Add end-point annotations
     for line in ax1.get_lines():
@@ -712,12 +794,26 @@ def display_cli_plot(ticker, since, interval, debug):
         ),
     )
 
+    # Add mouse-wheel zoom for line chart (uses matplotlib date x-axis)
+    def _on_scroll_line(event):
+        if event.inaxes is None:
+            return
+        cur_xlim = ax1.get_xlim()
+        xdata = event.xdata
+        if xdata is None:
+            xdata = (cur_xlim[0] + cur_xlim[1]) / 2
+        scale = 0.8 if event.button == "up" else 1.25
+        new_width = (cur_xlim[1] - cur_xlim[0]) * scale
+        rel = (xdata - cur_xlim[0]) / (cur_xlim[1] - cur_xlim[0])
+        new_left = xdata - new_width * rel
+        new_right = xdata + new_width * (1 - rel)
+        ax1.set_xlim(new_left, new_right)
+        fig.canvas.draw_idle()
+
+    fig.canvas.mpl_connect("scroll_event", _on_scroll_line)
+
     # Print interactive help
-    print("\n💡 Interactive Features:")
-    print("   - Pan: Click and drag to move left/right through time")
-    print("   - Zoom: Use the zoom button and select area, or scroll with mouse wheel")
-    print("   - Home: Reset to initial view")
-    print("   - Hover: Click on data points to see exact values")
+    print("\n💡 Scroll to zoom, drag to pan, Home button to reset view")
 
     # plt.tight_layout()
     plt.show()
