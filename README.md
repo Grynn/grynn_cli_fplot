@@ -195,8 +195,10 @@ Launch fplot charts directly from Alfred.
 - `fplot` installed and available on PATH (`uv tool install grynn-fplot` or `pip install grynn-fplot`)
 
 ### Install
-1. Download `fplot.alfredworkflow` from the [latest release](../../releases/latest) or build it: `make alfred`
-2. Double-click the `.alfredworkflow` file to install
+1. Build the workflow: `make alfred`
+2. Double-click `dist/fplot.alfredworkflow` to install in Alfred
+
+Alternatively, download `fplot.alfredworkflow` from the [latest release](../../releases/latest) (if available).
 
 ### Usage
 Type in Alfred:
