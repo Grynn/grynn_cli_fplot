@@ -65,9 +65,9 @@
 # Alfred doesn't inherit shell PATH - add common install locations
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
 # Prefer fplot on PATH (may be more recent than this workflow)
-fplot "$@"</string>
+fplot $@</string>
 <key>scriptargtype</key>
-<integer>0</integer>
+<integer>1</integer>
 <key>scriptfile</key>
 <string></string>
 <key>type</key>
