@@ -383,7 +383,7 @@ wheels = [
 
 [[package]]
 name = "grynn-fplot"
-version = "0.4.2"
+version = "0.4.3"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
@@ -418,15 +418,15 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "click", specifier = "~=8.1.7" },
-    { name = "dateparser", specifier = "~=1.2.0" },
-    { name = "fastapi", specifier = "~=0.115.0" },
+    { name = "click", specifier = ">=8.1.7" },
+    { name = "dateparser", specifier = ">=1.2.0" },
+    { name = "fastapi", specifier = ">=0.115.0" },
     { name = "grynn-pylib", git = "https://github.com/Grynn/grynn_pylib.git" },
     { name = "ipykernel", marker = "extra == 'dev'", specifier = ">=6.29.5" },
     { name = "ipython", marker = "extra == 'dev'", specifier = ">=8.18.1" },
     { name = "ipywidgets", specifier = ">=8.1.5" },
     { name = "matplotlib", specifier = ">=3.9.2" },
-    { name = "mplcursors", specifier = "~=0.5.3" },
+    { name = "mplcursors", specifier = ">=0.5.3" },
     { name = "mplfinance", specifier = ">=0.12.9" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14.1" },
     { name = "pandas", specifier = ">=2.2.3" },
@@ -434,7 +434,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9.2" },
     { name = "scikit-learn", specifier = ">=1.6.1" },
     { name = "tabulate", specifier = ">=0.9.0" },
-    { name = "uvicorn", specifier = "~=0.32.0" },
+    { name = "uvicorn", specifier = ">=0.32.0" },
     { name = "yfinance", git = "https://github.com/ranaroussi/yfinance.git" },
 ]
 provides-extras = ["dev"]

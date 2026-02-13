@@ -14,13 +14,13 @@ classifiers = [
   "Topic :: Office/Business :: Financial :: Investment",
 ]
 dependencies = [
-  "click ~= 8.1.7",
+  "click >= 8.1.7",
   "matplotlib >= 3.9.2",
-  "dateparser ~= 1.2.0",
-  "mplcursors ~= 0.5.3",
+  "dateparser >= 1.2.0",
+  "mplcursors >= 0.5.3",
   "mplfinance >= 0.12.9",
-  "fastapi ~= 0.115.0",
-  "uvicorn ~= 0.32.0",
+  "fastapi >= 0.115.0",
+  "uvicorn >= 0.32.0",
   "scikit-learn >= 1.6.1",
   "grynn-pylib",
   "ipywidgets>=8.1.5",
@@ -34,7 +34,7 @@ license = {text = "MIT"}
 name = "grynn-fplot"
 readme = "README.md"
 requires-python = ">=3.12"
-version = "0.4.2"
+version = "0.4.3"
 
 [project.scripts]
 fplot = "grynn_fplot.cli:display_plot"
