@@ -1,13 +1,78 @@
+# ruff: noqa: E402
+
 import importlib.metadata
+import importlib
+import importlib.util
+import os
 import sys
 import tempfile
 from datetime import datetime
 
 import click
+import matplotlib
+
+
+def _choose_matplotlib_backend() -> str | None:
+    """Choose an interactive backend when the environment supports one.
+
+    Respect an explicit MPLBACKEND, prefer modern GUI backends for CLI use,
+    and fall back to Agg in clearly headless Linux environments.
+    """
+    if os.environ.get("MPLBACKEND"):
+        return None
+
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return "Agg"
+
+    if sys.platform.startswith("linux") and not os.environ.get("DISPLAY") and not os.environ.get("WAYLAND_DISPLAY"):
+        return "Agg"
+
+    candidates: list[str] = []
+
+    if any(importlib.util.find_spec(module) for module in ("PyQt6", "PySide6", "PyQt5", "PySide2")):
+        candidates.append("QtAgg")
+
+    if sys.platform == "darwin":
+        candidates.append("macosx")
+
+    try:
+        import tkinter  # noqa: F401
+
+        candidates.append("TkAgg")
+    except Exception:
+        pass
+
+    backend_modules = {
+        "QtAgg": "matplotlib.backends.backend_qtagg",
+        "TkAgg": "matplotlib.backends.backend_tkagg",
+        "macosx": "matplotlib.backends.backend_macosx",
+    }
+
+    for backend in candidates:
+        module_name = backend_modules.get(backend)
+        if not module_name:
+            continue
+        try:
+            importlib.import_module(module_name)
+            return backend
+        except Exception:
+            continue
+
+    return None
+
+
+def _configure_matplotlib_backend() -> None:
+    backend = _choose_matplotlib_backend()
+    if backend:
+        matplotlib.use(backend, force=True)
+
+
+_configure_matplotlib_backend()
+
 import matplotlib.pyplot as plt
 import mplcursors
-import numpy as np
 import mplfinance as mpf
+import numpy as np
 from grynn_pylib.finance.timeseries import rolling_cagr
 from loguru import logger
 from tabulate import tabulate
@@ -16,12 +81,64 @@ from grynn_fplot.core import (
     calculate_area_under_curve,
     calculate_cagr,
     calculate_drawdowns,
-    download_ticker_data,
     download_ohlcv_data,
+    download_ticker_data,
+    format_options_for_display,
     normalize_prices,
     parse_start_date,
-    format_options_for_display,
 )
+
+
+def _attach_drag_pan(fig, axes, clamp_min=None, clamp_max=None) -> None:
+    """Enable left-click drag panning across a shared x-axis."""
+    pan_state = {"active": False, "x": None, "xlim": None}
+
+    def _clamp_xlim(left, right):
+        if clamp_min is None or clamp_max is None:
+            return left, right
+
+        width = right - left
+        if width <= 0:
+            return clamp_min, clamp_max
+
+        if width >= (clamp_max - clamp_min):
+            return clamp_min, clamp_max
+
+        if left < clamp_min:
+            right += clamp_min - left
+            left = clamp_min
+        if right > clamp_max:
+            left -= right - clamp_max
+            right = clamp_max
+        return left, right
+
+    def _on_press(event):
+        if event.button != 1 or event.inaxes not in axes or event.xdata is None:
+            return
+        pan_state["active"] = True
+        pan_state["x"] = event.xdata
+        pan_state["xlim"] = axes[0].get_xlim()
+
+    def _on_motion(event):
+        if not pan_state["active"] or event.xdata is None or pan_state["xlim"] is None or pan_state["x"] is None:
+            return
+
+        dx = event.xdata - pan_state["x"]
+        left, right = pan_state["xlim"]
+        new_left, new_right = _clamp_xlim(left - dx, right - dx)
+        for ax in axes:
+            ax.set_xlim(new_left, new_right)
+        fig.canvas.draw_idle()
+
+    def _on_release(event):
+        pan_state["active"] = False
+        pan_state["x"] = None
+        pan_state["xlim"] = None
+
+    fig.canvas.mpl_connect("button_press_event", _on_press)
+    fig.canvas.mpl_connect("motion_notify_event", _on_motion)
+    fig.canvas.mpl_connect("button_release_event", _on_release)
+
 
 try:
     # if __package__ is None and __name__ == "__main__" this is being run from vscode interactive
@@ -581,6 +698,7 @@ def display_candlestick_plot(ticker, since, interval, debug):
 
     # Add scroll-zoom and date tick formatting
     _add_scroll_zoom(fig, axes, df.index)
+    _attach_drag_pan(fig, axes, clamp_min=0, clamp_max=len(df) - 1)
 
     # Add legend
     from matplotlib.lines import Line2D
@@ -734,7 +852,7 @@ def display_cli_plot(ticker, since, interval, debug):
 
         ax1.plot(df_all_normalized.index, df_all_normalized[ticker_name], label=label, color=colors[i])
 
-    ax1.set_title(f"{', '.join(tickers)} Price (Pan/Zoom enabled - use toolbar)")
+    ax1.set_title(f"{', '.join(tickers)} Price")
     ax1.set_ylabel("Normalized Price")
     ax1.legend(loc="best")
 
@@ -796,6 +914,8 @@ def display_cli_plot(ticker, since, interval, debug):
 
     # Add mouse-wheel zoom for line chart (uses matplotlib date x-axis)
     def _on_scroll_line(event):
+        import matplotlib.dates as mdates
+
         if event.inaxes is None:
             return
         cur_xlim = ax1.get_xlim()
@@ -807,10 +927,26 @@ def display_cli_plot(ticker, since, interval, debug):
         rel = (xdata - cur_xlim[0]) / (cur_xlim[1] - cur_xlim[0])
         new_left = xdata - new_width * rel
         new_right = xdata + new_width * (1 - rel)
+        data_min = mdates.date2num(df_all.index[0])
+        data_max = mdates.date2num(df_all.index[-1])
+        if new_left < data_min:
+            new_right += data_min - new_left
+            new_left = data_min
+        if new_right > data_max:
+            new_left -= new_right - data_max
+            new_right = data_max
         ax1.set_xlim(new_left, new_right)
         fig.canvas.draw_idle()
 
     fig.canvas.mpl_connect("scroll_event", _on_scroll_line)
+    import matplotlib.dates as mdates
+
+    _attach_drag_pan(
+        fig,
+        [ax1, ax2],
+        clamp_min=mdates.date2num(df_all.index[0]),
+        clamp_max=mdates.date2num(df_all.index[-1]),
+    )
 
     # Print interactive help
     print("\n💡 Scroll to zoom, drag to pan, Home button to reset view")
