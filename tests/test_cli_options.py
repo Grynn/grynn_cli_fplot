@@ -7,6 +7,11 @@ from grynn_fplot.cli import display_plot
 class TestCliOptions(unittest.TestCase):
     def setUp(self):
         self.runner = CliRunner()
+        self.default_filter_patcher = patch("grynn_fplot.filter_store.get_default_filter", return_value=None)
+        self.default_filter_patcher.start()
+
+    def tearDown(self):
+        self.default_filter_patcher.stop()
 
     def test_version_flag(self):
         """Test that version flag works"""
@@ -42,9 +47,8 @@ class TestCliOptions(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("No call options found", result.output)
 
-    @patch("grynn_fplot.filter_store.get_default_filter", return_value=None)
     @patch("grynn_fplot.cli.format_options_for_display")
-    def test_put_flag_with_options(self, mock_format, _mock_default):
+    def test_put_flag_with_options(self, mock_format):
         """Test --put flag with available options"""
         mock_format.return_value = ["AAPL 150P 30DTE ($3.50, 8.2%)", "AAPL 145P 30DTE ($2.00, 12.1%)"]
 

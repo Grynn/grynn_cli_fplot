@@ -277,8 +277,18 @@ def download_ticker_data(ticker, since, interval="1d"):
 
 
 def normalize_prices(df: Union[pd.Series, pd.DataFrame], start=100):
-    """Normalize prices to a starting value of 100"""
-    return df.div(df.iloc[0]).mul(start)
+    """Normalize prices to a starting value of 100.
+
+    Each series uses its own first valid observation. This keeps late-listed
+    tickers plottable alongside older names instead of turning the entire
+    normalized column into NaN.
+    """
+    if isinstance(df, pd.Series):
+        first_valid = df.dropna().iloc[0] if df.notna().any() else np.nan
+        return df.div(first_valid).mul(start)
+
+    first_valid = df.apply(lambda series: series.dropna().iloc[0] if series.notna().any() else np.nan)
+    return df.div(first_valid).mul(start)
 
 
 def calculate_drawdowns(df: Union[pd.Series, pd.DataFrame]) -> Union[pd.Series, pd.DataFrame]:
