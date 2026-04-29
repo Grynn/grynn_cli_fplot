@@ -33,6 +33,18 @@ Or install locally:
 make install  # Uses uv tool install .
 ```
 
+## Readme for Agents
+
+Agents working on this repository should install the project skill before making changes:
+
+```shell
+python ~/.agents/skills/.system/skill-installer/scripts/install-skill-from-github.py \
+  --repo Grynn/grynn_cli_fplot \
+  --path skills/fplot
+```
+
+Restart the agent session after installing the skill so it is loaded. The skill captures project-specific workflows for comparative chart checks, visual verification, testing, versioning, and PyPI release behavior.
+
 ## Usage
 
 ### Stock Plotting
