@@ -6,7 +6,6 @@ import importlib.util
 import os
 import sys
 import tempfile
-from datetime import datetime
 
 import click
 import matplotlib
@@ -138,6 +137,67 @@ def _attach_drag_pan(fig, axes, clamp_min=None, clamp_max=None) -> None:
     fig.canvas.mpl_connect("button_press_event", _on_press)
     fig.canvas.mpl_connect("motion_notify_event", _on_motion)
     fig.canvas.mpl_connect("button_release_event", _on_release)
+
+
+def _visible_mask_from_xlim(x_values, left, right):
+    """Return a row mask for data points visible within a matplotlib x-axis range."""
+    if len(x_values) == 0:
+        return np.array([], dtype=bool)
+
+    left, right = sorted((left, right))
+    mask = (x_values >= left) & (x_values <= right)
+    if mask.any():
+        return mask
+
+    # Very narrow zooms can fall between observations. Use the nearest point so
+    # normalization still has a stable base instead of leaving the chart blank.
+    nearest = int(np.clip(np.searchsorted(x_values, left), 0, len(x_values) - 1))
+    mask[nearest] = True
+    return mask
+
+
+def _normalize_frame_to_visible_window(df, visible_mask, start=100):
+    """Normalize full data to the first valid observation in the visible window.
+
+    Drawdowns are intentionally reset to the visible window, matching what the
+    user is currently evaluating after a pan or zoom.
+    """
+    visible = df.iloc[visible_mask]
+    normalized = df.copy().astype(float) * np.nan
+    drawdown = normalized.copy()
+
+    if visible.empty:
+        return normalized, drawdown
+
+    base = visible.apply(lambda series: series.dropna().iloc[0] if series.notna().any() else np.nan)
+    normalized = df.div(base).mul(start)
+
+    visible_normalized = normalized.loc[visible.index]
+    drawdown.loc[visible.index] = calculate_drawdowns(visible_normalized)
+    return normalized, drawdown
+
+
+def _set_padded_ylim(ax, values, *, zero_top=False) -> None:
+    """Set a compact y-axis around finite visible values."""
+    finite_values = np.asarray(values, dtype=float)
+    finite_values = finite_values[np.isfinite(finite_values)]
+    if finite_values.size == 0:
+        return
+
+    y_min = float(np.min(finite_values))
+    y_max = float(np.max(finite_values))
+
+    if zero_top:
+        y_min = min(y_min, 0.0)
+        pad = max(abs(y_min) * 0.05, 0.01)
+        ax.set_ylim(y_min - pad, 0.0)
+        return
+
+    if y_max == y_min:
+        pad = max(abs(y_min) * 0.05, 1.0)
+    else:
+        pad = (y_max - y_min) * 0.05
+    ax.set_ylim(y_min - pad, y_max + pad)
 
 
 try:
@@ -797,15 +857,21 @@ def display_cli_plot(ticker, since, interval, debug):
     if df_all.iloc[-1].isna().any():
         df_all = df_all.iloc[:-1]
 
+    # Align comparison: drop rows before the first date where all tickers have data,
+    # so late-listed tickers don't break the common base.
+    if df_all.shape[1] > 1:
+        first_common = df_all.dropna(how="any").index.min()
+        if pd.notna(first_common):
+            df_all = df_all.loc[first_common:]
+            df = df.loc[df.index >= first_common]
+            if initial_view_start is not None and initial_view_start < first_common:
+                initial_view_start = first_common
+
     # Metrics are computed on the view window (df)
     df_normalized = normalize_prices(df)
     df_dd = calculate_drawdowns(df_normalized)
     df_auc = calculate_area_under_curve(df_dd)
     df_days = (df.index[-1] - df.index[0]).days
-
-    # Normalize/drawdown the FULL dataset for plotting (so pan/zoom reveals all history)
-    df_all_normalized = normalize_prices(df_all)
-    df_all_dd = calculate_drawdowns(df_all_normalized)
 
     # Display AUC analysis in CLI
     print("\n=== Drawdown Area Under Curve Analysis ===")
@@ -832,15 +898,31 @@ def display_cli_plot(ticker, since, interval, debug):
         print(f"CAGR represents annualized return over the period {df.index[0]} to {df.index[-1]}, {df_days} days.\n")
 
     # Prepare for plotting — plot ALL data for pan/zoom, set xlim for initial view
+    import matplotlib.dates as mdates
+    from matplotlib.widgets import Button, RangeSlider
+
     auc_values = dict(zip(df_auc["Ticker"], df_auc["AUC"]))
+    x_values = mdates.date2num(df_all.index.to_pydatetime())
+    data_min = float(x_values[0])
+    data_max = float(x_values[-1])
+    initial_left = mdates.date2num(initial_view_start) if initial_view_start is not None else data_min
+    initial_right = data_max
+    initial_visible_mask = _visible_mask_from_xlim(x_values, initial_left, initial_right)
+    df_all_normalized, df_all_dd = _normalize_frame_to_visible_window(df_all, initial_visible_mask)
+
     fig, (ax1, ax2) = plt.subplots(
         2, 1, figsize=(16, 12), sharex=True, gridspec_kw={"height_ratios": [3, 2], "hspace": 0.3}
     )
+    fig.subplots_adjust(bottom=0.22)
 
     # Generate colors for each ticker
     color_map = plt.get_cmap("tab10")
     color_iter = iter(color_map.colors)
     colors = [next(color_iter) if t != "SPY" else "darkgrey" for t in tickers]
+    ticker_colors = dict(zip(tickers, colors))
+    price_lines = {}
+    drawdown_lines = {}
+    drawdown_fills = []
 
     # Plot normalized prices (full history)
     for i, ticker_name in enumerate(tickers):
@@ -850,7 +932,8 @@ def display_cli_plot(ticker, since, interval, debug):
             cagr_value = cagr_df.loc[cagr_df["Ticker"] == ticker_name, "CAGR"].values[0]
             label += f" - CAGR: {cagr_value:.2%}"
 
-        ax1.plot(df_all_normalized.index, df_all_normalized[ticker_name], label=label, color=colors[i])
+        (price_line,) = ax1.plot(df_all_normalized.index, df_all_normalized[ticker_name], label=label, color=colors[i])
+        price_lines[ticker_name] = price_line
 
     ax1.set_title(f"{', '.join(tickers)} Price")
     ax1.set_ylabel("Normalized Price")
@@ -858,40 +941,214 @@ def display_cli_plot(ticker, since, interval, debug):
 
     # Plot drawdowns (full history)
     for i, ticker_name in enumerate(tickers):
-        ax2.plot(
+        (drawdown_line,) = ax2.plot(
             df_all_dd.index,
             df_all_dd[ticker_name],
             label=f"{ticker_name} - AUC: {auc_values[ticker_name]:.2f}",
             color=colors[i],
         )
-        ax2.fill_between(df_all_dd.index, df_all_dd[ticker_name], alpha=0.5, color=colors[i])
+        drawdown_lines[ticker_name] = drawdown_line
+        drawdown_fills.append(ax2.fill_between(df_all_dd.index, df_all_dd[ticker_name], alpha=0.5, color=colors[i]))
 
     ax2.set_title(f"{', '.join(tickers)} Drawdowns")
     ax2.set_ylabel("Drawdown")
-    ax2.set_xlabel(
-        f"from {since_parsed.date() if since_parsed else df_all.index[0].date()} to {datetime.now().date()} in {interval} intervals"
-    )
+    ax2.set_xlabel(f"{interval} intervals")
     ax2.legend(loc="best")
 
-    # Set initial view xlim
-    if initial_view_start is not None:
-        import matplotlib.dates as mdates
+    price_annotations = {
+        ticker_name: ax1.annotate(
+            "",
+            xy=(df_all.index[-1], 100),
+            xytext=(5, 0),
+            textcoords="offset points",
+            color=ticker_colors[ticker_name],
+        )
+        for ticker_name in tickers
+    }
 
-        ax1.set_xlim(mdates.date2num(initial_view_start), mdates.date2num(df_all.index[-1]))
+    slider_ax = fig.add_axes([0.12, 0.09, 0.76, 0.03])
+    view_slider = RangeSlider(
+        slider_ax, "View", data_min, data_max, valinit=(initial_left, initial_right), valfmt="%1.0f"
+    )
+    view_slider.valtext.set_visible(False)
+    slider_ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    view_range_text = slider_ax.text(0.5, 1.25, "", transform=slider_ax.transAxes, ha="center", va="bottom", fontsize=9)
+    range_buttons = []
 
-    # Add end-point annotations
-    for line in ax1.get_lines():
-        y = line.get_ydata()[-1]
-        x = line.get_xdata()[-1]
-        label = line.get_label().split(" - ")[0]  # Extract just the ticker part
+    update_state = {"syncing_slider": False, "skip_xlim_callback": False, "updating": False}
 
-        # Handle masked values
-        if isinstance(y, np.ma.core.MaskedConstant):
-            value_text = "N/A"
+    def _format_num_date(value):
+        return mdates.num2date(value).strftime("%Y-%m-%d")
+
+    def _left_for_duration(right, label):
+        right_dt = mdates.num2date(right).replace(tzinfo=None)
+        amount = int(label[:-1])
+        unit = label[-1]
+
+        if unit == "d":
+            left_dt = right_dt - pd.Timedelta(days=amount)
+        elif unit == "m":
+            left_dt = right_dt - pd.DateOffset(months=amount)
+        elif unit == "y":
+            left_dt = right_dt - pd.DateOffset(years=amount)
         else:
-            value_text = f"{y - 100:.2f}%"
+            return data_min
 
-        ax1.annotate(f"{label}: {value_text}", xy=(x, y), color=line.get_color())
+        return mdates.date2num(pd.Timestamp(left_dt).to_pydatetime())
+
+    def _clamp_visible_window(left, right):
+        left, right = sorted((left, right))
+        width = right - left
+        full_width = data_max - data_min
+
+        if width <= 0 or width >= full_width:
+            return data_min, data_max
+
+        if left < data_min:
+            right += data_min - left
+            left = data_min
+        if right > data_max:
+            left -= right - data_max
+            right = data_max
+        return max(data_min, left), min(data_max, right)
+
+    def _update_price_annotations(normalized_frame, visible_mask):
+        visible_positions = np.flatnonzero(visible_mask)
+        for ticker_name, annotation in price_annotations.items():
+            visible_series = normalized_frame[ticker_name].iloc[visible_positions].dropna()
+            if visible_series.empty:
+                annotation.set_visible(False)
+                continue
+
+            last_x = visible_series.index[-1]
+            last_y = float(visible_series.iloc[-1])
+            annotation.xy = (last_x, last_y)
+            annotation.set_text(f"{ticker_name}: {last_y - 100:.2f}%")
+            annotation.set_visible(True)
+
+    def _update_visible_legends(normalized_frame, drawdown_frame, visible_positions):
+        visible_drawdown = drawdown_frame.iloc[visible_positions]
+        visible_auc_df = calculate_area_under_curve(visible_drawdown)
+        visible_auc = dict(zip(visible_auc_df["Ticker"], visible_auc_df["AUC"]))
+        visible_dates = normalized_frame.index[visible_positions]
+        visible_days = (visible_dates[-1] - visible_dates[0]).days if len(visible_dates) > 1 else 0
+        visible_cagr = {}
+        if visible_days >= 365:
+            cagr_records = calculate_cagr(normalized_frame.iloc[visible_positions]).to_dict("records")
+            visible_cagr = {record["Ticker"]: record["CAGR"] for record in cagr_records}
+
+        for ticker_name in tickers:
+            auc_value = visible_auc.get(ticker_name, 0.0)
+            label = f"{ticker_name} - AUC: {auc_value:.2f}"
+            cagr_value = visible_cagr.get(ticker_name)
+            if cagr_value is not None and np.isfinite(cagr_value):
+                label += f" - CAGR: {cagr_value:.2%}"
+            price_lines[ticker_name].set_label(label)
+            drawdown_lines[ticker_name].set_label(f"{ticker_name} - AUC: {auc_value:.2f}")
+
+        ax1.legend(loc="best")
+        ax2.legend(loc="best")
+
+    def _apply_visible_window(left=None, right=None, *, update_slider=True):
+        nonlocal drawdown_fills
+
+        if update_state["updating"]:
+            return
+
+        update_state["updating"] = True
+        try:
+            if left is None or right is None:
+                left, right = ax1.get_xlim()
+            left, right = _clamp_visible_window(left, right)
+            visible_mask = _visible_mask_from_xlim(x_values, left, right)
+            normalized_frame, drawdown_frame = _normalize_frame_to_visible_window(df_all, visible_mask)
+            visible_positions = np.flatnonzero(visible_mask)
+
+            visible_index = normalized_frame.index[visible_positions]
+            for ticker_name in tickers:
+                price_lines[ticker_name].set_data(visible_index, normalized_frame[ticker_name].iloc[visible_positions])
+                drawdown_lines[ticker_name].set_data(visible_index, drawdown_frame[ticker_name].iloc[visible_positions])
+
+            for fill in drawdown_fills:
+                fill.remove()
+            drawdown_fills = [
+                ax2.fill_between(
+                    visible_index,
+                    drawdown_frame[ticker_name].iloc[visible_positions],
+                    alpha=0.5,
+                    color=ticker_colors[ticker_name],
+                )
+                for ticker_name in tickers
+            ]
+
+            _set_padded_ylim(ax1, normalized_frame.iloc[visible_positions].to_numpy())
+            _set_padded_ylim(ax2, drawdown_frame.iloc[visible_positions].to_numpy(), zero_top=True)
+            _update_price_annotations(normalized_frame, visible_mask)
+            _update_visible_legends(normalized_frame, drawdown_frame, visible_positions)
+            window_label = f"from {_format_num_date(left)} to {_format_num_date(right)} in {interval} intervals"
+            view_range_text.set_text(window_label)
+            for axis in (ax1, ax2):
+                axis.set_xlim(left, right, emit=False)
+
+            if update_slider:
+                update_state["syncing_slider"] = True
+                try:
+                    view_slider.set_val((left, right))
+                finally:
+                    update_state["syncing_slider"] = False
+        finally:
+            update_state["updating"] = False
+
+    def _on_xlim_changed(_ax):
+        if update_state["skip_xlim_callback"] or update_state["updating"]:
+            return
+        _apply_visible_window(update_slider=True)
+        fig.canvas.draw_idle()
+
+    def _on_slider_changed(value):
+        if update_state["syncing_slider"]:
+            return
+
+        left, right = value
+        update_state["skip_xlim_callback"] = True
+        for axis in (ax1, ax2):
+            axis.set_xlim(left, right)
+        update_state["skip_xlim_callback"] = False
+        _apply_visible_window(left, right, update_slider=False)
+        fig.canvas.draw_idle()
+
+    def _on_range_button(label):
+        _current_left, current_right = view_slider.val
+        right = min(max(current_right, data_min), data_max)
+        left = max(_left_for_duration(right, label), data_min)
+        left, right = _clamp_visible_window(left, right)
+
+        update_state["skip_xlim_callback"] = True
+        try:
+            for axis in (ax1, ax2):
+                axis.set_xlim(left, right)
+        finally:
+            update_state["skip_xlim_callback"] = False
+        _apply_visible_window(left, right, update_slider=True)
+        fig.canvas.draw_idle()
+
+    button_labels = ["7d", "30d", "3m", "6m", "1y", "2y", "3y"]
+    button_width = 0.07
+    button_gap = 0.012
+    buttons_total_width = len(button_labels) * button_width + (len(button_labels) - 1) * button_gap
+    button_left = 0.5 - buttons_total_width / 2
+    for button_index, label in enumerate(button_labels):
+        button_ax = fig.add_axes([button_left + button_index * (button_width + button_gap), 0.025, button_width, 0.035])
+        button = Button(button_ax, label)
+        button.on_clicked(lambda _event, button_label=label: _on_range_button(button_label))
+        range_buttons.append(button)
+
+    fig._fplot_widgets = [view_slider, *range_buttons]
+
+    ax1.callbacks.connect("xlim_changed", _on_xlim_changed)
+    view_slider.on_changed(_on_slider_changed)
+    ax1.set_xlim(initial_left, initial_right)
+    _apply_visible_window(initial_left, initial_right, update_slider=False)
 
     # Add interactive cursor functionality
     cursor1 = mplcursors.cursor(ax1)
@@ -914,8 +1171,6 @@ def display_cli_plot(ticker, since, interval, debug):
 
     # Add mouse-wheel zoom for line chart (uses matplotlib date x-axis)
     def _on_scroll_line(event):
-        import matplotlib.dates as mdates
-
         if event.inaxes is None:
             return
         cur_xlim = ax1.get_xlim()
@@ -927,8 +1182,6 @@ def display_cli_plot(ticker, since, interval, debug):
         rel = (xdata - cur_xlim[0]) / (cur_xlim[1] - cur_xlim[0])
         new_left = xdata - new_width * rel
         new_right = xdata + new_width * (1 - rel)
-        data_min = mdates.date2num(df_all.index[0])
-        data_max = mdates.date2num(df_all.index[-1])
         if new_left < data_min:
             new_right += data_min - new_left
             new_left = data_min

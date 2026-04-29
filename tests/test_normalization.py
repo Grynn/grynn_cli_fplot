@@ -4,6 +4,7 @@ import unittest
 
 import pandas as pd
 
+from grynn_fplot.cli import _normalize_frame_to_visible_window
 from grynn_fplot.core import normalize_prices
 
 
@@ -38,6 +39,28 @@ class TestNormalizePrices(unittest.TestCase):
         self.assertTrue(pd.isna(result.iloc[0]))
         self.assertEqual(result.iloc[1], 100.0)
         self.assertEqual(result.iloc[2], 120.0)
+
+    def test_visible_window_normalization_rebases_to_current_view(self):
+        """Interactive comparative charts should rebase after pan or zoom."""
+        dates = pd.date_range("2024-01-01", periods=4, freq="D")
+        df = pd.DataFrame(
+            {
+                "A": [100.0, 80.0, 120.0, 90.0],
+                "B": [None, 40.0, 80.0, 100.0],
+            },
+            index=dates,
+        )
+
+        visible_mask = [False, False, True, True]
+        normalized, drawdown = _normalize_frame_to_visible_window(df, visible_mask)
+
+        self.assertAlmostEqual(normalized.loc[dates[2], "A"], 100.0)
+        self.assertAlmostEqual(normalized.loc[dates[2], "B"], 100.0)
+        self.assertAlmostEqual(normalized.loc[dates[3], "A"], 75.0)
+        self.assertAlmostEqual(normalized.loc[dates[3], "B"], 125.0)
+        self.assertTrue(pd.isna(drawdown.loc[dates[1], "A"]))
+        self.assertAlmostEqual(drawdown.loc[dates[2], "A"], 0.0)
+        self.assertAlmostEqual(drawdown.loc[dates[3], "A"], -0.25)
 
 
 if __name__ == "__main__":
