@@ -169,7 +169,11 @@ def download_ohlcv_data(ticker, since, interval="1d"):
 
     # Return only the OHLCV columns we need
     ohlcv_columns = ["Open", "High", "Low", "Close", "Volume"]
-    df_full = df_full[ohlcv_columns]
+    df_full = df_full[ohlcv_columns].copy()
+
+    # Yahoo can expose an in-progress candle before every price field is
+    # populated. mplfinance requires complete OHLC values for each candle.
+    df_full = df_full.dropna(subset=["Open", "High", "Low", "Close"])
 
     # Filter to the requested view window for return
     if since is not None:

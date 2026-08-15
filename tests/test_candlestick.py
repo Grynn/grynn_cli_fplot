@@ -1,4 +1,5 @@
 """Tests for candlestick chart functionality."""
+
 import unittest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -15,19 +16,19 @@ class TestCandlestickChart(unittest.TestCase):
 
     def _create_ohlcv_df(self, days=1095):
         """Create a mock OHLCV DataFrame. Default is 3 years (1095 days)."""
-        dates = pd.date_range(start=datetime.now() - timedelta(days=days), periods=days, freq='D')
+        dates = pd.date_range(start=datetime.now() - timedelta(days=days), periods=days, freq="D")
         data = {
-            'Open': [100 + i * 0.1 for i in range(days)],
-            'High': [101 + i * 0.1 for i in range(days)],
-            'Low': [99 + i * 0.1 for i in range(days)],
-            'Close': [100.5 + i * 0.1 for i in range(days)],
-            'Volume': [1000000 + i * 1000 for i in range(days)]
+            "Open": [100 + i * 0.1 for i in range(days)],
+            "High": [101 + i * 0.1 for i in range(days)],
+            "Low": [99 + i * 0.1 for i in range(days)],
+            "Close": [100.5 + i * 0.1 for i in range(days)],
+            "Volume": [1000000 + i * 1000 for i in range(days)],
         }
         return pd.DataFrame(data, index=dates)
 
     def _create_multi_ticker_df(self, columns):
         """Create a mock DataFrame for multi-ticker comparison."""
-        dates = pd.date_range(start=datetime.now() - timedelta(days=2), periods=3, freq='D')
+        dates = pd.date_range(start=datetime.now() - timedelta(days=2), periods=3, freq="D")
         data = {col: [100, 101, 102] for col in columns}
         return pd.DataFrame(data, index=dates)
 
@@ -107,16 +108,19 @@ class TestDownloadOHLCVData(unittest.TestCase):
         unique_ticker = f"TEST_{uuid.uuid4().hex[:8].upper()}"
 
         # Create mock data
-        dates = pd.date_range(start=datetime.now() - timedelta(days=10), periods=10, freq='D')
-        mock_data = pd.DataFrame({
-            'Open': [100] * 10,
-            'High': [101] * 10,
-            'Low': [99] * 10,
-            'Close': [100.5] * 10,
-            'Volume': [1000000] * 10,
-            'Dividends': [0] * 10,  # Extra column that should not be returned
-            'Stock Splits': [0] * 10  # Extra column that should not be returned
-        }, index=dates)
+        dates = pd.date_range(start=datetime.now() - timedelta(days=10), periods=10, freq="D")
+        mock_data = pd.DataFrame(
+            {
+                "Open": [100] * 10,
+                "High": [101] * 10,
+                "Low": [99] * 10,
+                "Close": [100.5] * 10,
+                "Volume": [1000000] * 10,
+                "Dividends": [0] * 10,  # Extra column that should not be returned
+                "Stock Splits": [0] * 10,  # Extra column that should not be returned
+            },
+            index=dates,
+        )
 
         # Mock the Ticker instance
         mock_ticker_instance = MagicMock()
@@ -128,8 +132,37 @@ class TestDownloadOHLCVData(unittest.TestCase):
 
         # Verify result
         self.assertIsInstance(result, pd.DataFrame)
-        self.assertListEqual(list(result.columns), ['Open', 'High', 'Low', 'Close', 'Volume'])
+        self.assertListEqual(list(result.columns), ["Open", "High", "Low", "Close", "Volume"])
         self.assertEqual(len(result), 10)
+
+    @patch("grynn_fplot.core.yfinance.Ticker")
+    def test_download_ohlcv_data_drops_incomplete_candles(self, mock_ticker_class):
+        """Test that partially populated OHLC rows are omitted."""
+        from grynn_fplot.core import download_ohlcv_data
+        import uuid
+
+        unique_ticker = f"TEST_{uuid.uuid4().hex[:8].upper()}"
+        dates = pd.date_range(start=datetime.now() - timedelta(days=2), periods=3, freq="D")
+        mock_data = pd.DataFrame(
+            {
+                "Open": [100, 101, 102],
+                "High": [101, 102, 103],
+                "Low": [99, 100, 101],
+                "Close": [100.5, 101.5, None],
+                "Volume": [1000000, 1100000, 1200000],
+            },
+            index=dates,
+        )
+
+        mock_ticker_instance = MagicMock()
+        mock_ticker_instance.history.return_value = mock_data
+        mock_ticker_class.return_value = mock_ticker_instance
+
+        result = download_ohlcv_data(unique_ticker, None, "1d")
+
+        self.assertEqual(len(result), 2)
+        self.assertFalse(result[["Open", "High", "Low", "Close"]].isna().any().any())
+        self.assertNotIn(dates[-1], result.index)
 
     def test_download_ohlcv_data_requires_yfinance(self):
         """Test that download_ohlcv_data raises ImportError if yfinance not available."""
