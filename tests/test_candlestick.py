@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from grynn_fplot.cli import display_plot
-import mplfinance as mpf
+import matplotlib.pyplot as plt
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -46,21 +46,26 @@ class TestCandlestickChart(unittest.TestCase):
         mock_download_ohlcv.assert_called_once()
         self.assertIn("candlestick", result.output.lower())
 
-    @patch("grynn_fplot.cli.mpf.plot", wraps=mpf.plot)
     @patch("grynn_fplot.cli.download_ohlcv_data")
     @patch("grynn_fplot.cli.plt.show")
-    def test_single_ticker_candles_are_normalized(self, mock_show, mock_download_ohlcv, mock_plot):
-        """The candlestick renderer should receive OHLC values rebased to 100."""
-        mock_df = self._create_ohlcv_df(days=250)
+    def test_single_ticker_autoscales_visible_prices(self, mock_show, mock_download_ohlcv):
+        """Initial and panned views should each use the available vertical space."""
+        mock_df = self._create_ohlcv_df(days=1095)
         mock_download_ohlcv.return_value = mock_df
+        captured_ylims = {}
 
-        result = self.runner.invoke(display_plot, ["AAPL", "--since", "max"])
+        def inspect_and_pan():
+            price_ax = plt.gcf().axes[0]
+            captured_ylims["initial"] = price_ax.get_ylim()
+            price_ax.set_xlim(0, 99)
+            captured_ylims["panned"] = price_ax.get_ylim()
+
+        mock_show.side_effect = inspect_and_pan
+        result = self.runner.invoke(display_plot, ["AAPL", "--since", "1y"])
 
         self.assertEqual(result.exit_code, 0)
-        plotted_df = mock_plot.call_args.args[0]
-        self.assertEqual(plotted_df["Close"].iloc[0], 100.0)
-        self.assertListEqual(plotted_df["Volume"].tolist(), mock_df["Volume"].tolist())
-        self.assertEqual(mock_plot.call_args.kwargs["ylabel"], "Normalized Price (base = 100)")
+        self.assertGreater(captured_ylims["initial"][0], 150.0)
+        self.assertLess(captured_ylims["panned"][1], 120.0)
 
     @patch("grynn_fplot.cli.download_ticker_data")
     @patch("grynn_fplot.cli.plt.show")

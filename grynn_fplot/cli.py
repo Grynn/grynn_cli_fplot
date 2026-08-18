@@ -177,26 +177,6 @@ def _normalize_frame_to_visible_window(df, visible_mask, start=100):
     return normalized, drawdown
 
 
-def _normalize_ohlcv_to_visible_window(df, view_start_idx, start=100):
-    """Rebase OHLC prices to the first visible close while preserving volume.
-
-    Every price field must use the same base so candle bodies and wicks retain
-    their relative shape. Rows before the visible window are also transformed
-    to keep panning across the prefetched history continuous.
-    """
-    if df.empty:
-        return df.copy()
-
-    base_close = float(df["Close"].iloc[view_start_idx])
-    if not np.isfinite(base_close) or base_close == 0:
-        raise ValueError("Cannot normalize candlestick data without a finite, non-zero close price")
-
-    normalized = df.copy()
-    price_columns = [column for column in ("Open", "High", "Low", "Close") if column in normalized.columns]
-    normalized[price_columns] = normalized[price_columns].div(base_close).mul(start)
-    return normalized
-
-
 def _set_padded_ylim(ax, values, *, zero_top=False) -> None:
     """Set a compact y-axis around finite visible values."""
     finite_values = np.asarray(values, dtype=float)
@@ -218,6 +198,21 @@ def _set_padded_ylim(ax, values, *, zero_top=False) -> None:
     else:
         pad = (y_max - y_min) * 0.05
     ax.set_ylim(y_min - pad, y_max + pad)
+
+
+def _set_candlestick_visible_ylim(ax, df, moving_averages=()) -> None:
+    """Fit the price axis to candles and overlays inside its visible x-range."""
+    left, right = sorted(ax.get_xlim())
+    start = max(int(np.floor(left)), 0)
+    stop = min(int(np.ceil(right)) + 1, len(df))
+    if start >= stop:
+        nearest = int(np.clip(round(left), 0, len(df) - 1))
+        start, stop = nearest, nearest + 1
+
+    price_columns = [column for column in ("Open", "High", "Low", "Close") if column in df.columns]
+    visible_values = [df.iloc[start:stop][price_columns].to_numpy().ravel()]
+    visible_values.extend(series.iloc[start:stop].to_numpy() for series in moving_averages)
+    _set_padded_ylim(ax, np.concatenate(visible_values))
 
 
 try:
@@ -719,14 +714,11 @@ def display_candlestick_plot(ticker, since, interval, debug):
 
     view_count = len(df) - view_start_idx
 
-    # Rebase the first visible close to 100. Use the same factor for every
-    # price field so candlestick geometry remains intact; volume is unchanged.
-    df = _normalize_ohlcv_to_visible_window(df, view_start_idx)
     sma_50 = df["Close"].rolling(window=50).mean()
     sma_200 = df["Close"].rolling(window=200).mean()
 
     print(
-        f"Generating normalized candlestick plot for {ticker} since "
+        f"Generating candlestick plot for {ticker} since "
         f"{requested_since.date() if requested_since else 'max'}. Interval: {interval}"
     )
     print(f"📊 Loaded {len(df)} data points (up to 10 years cached)")
@@ -765,8 +757,8 @@ def display_candlestick_plot(ticker, since, interval, debug):
         style=s,
         volume=True,
         addplot=add_plots if add_plots else None,
-        title=f"{ticker} - Normalized Candlestick Chart",
-        ylabel="Normalized Price (base = 100)",
+        title=f"{ticker} - Candlestick Chart",
+        ylabel="Price",
         ylabel_lower="Volume",
         figsize=(16, 10),
         xrotation=15,
@@ -778,6 +770,14 @@ def display_candlestick_plot(ticker, since, interval, debug):
     if view_start_idx > 0:
         for ax in axes:
             ax.set_xlim(view_start_idx, len(df) - 1)
+
+    moving_averages = tuple(series for series in (sma_50, sma_200) if not series.isna().all())
+
+    def _autoscale_visible_prices(ax):
+        _set_candlestick_visible_ylim(ax, df, moving_averages)
+
+    axes[0].callbacks.connect("xlim_changed", _autoscale_visible_prices)
+    _autoscale_visible_prices(axes[0])
 
     # Add scroll-zoom and date tick formatting
     _add_scroll_zoom(fig, axes, df.index)
