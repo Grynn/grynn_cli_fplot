@@ -4,6 +4,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 from grynn_fplot.cli import display_plot
+import mplfinance as mpf
 import pandas as pd
 from datetime import datetime, timedelta
 
@@ -44,6 +45,22 @@ class TestCandlestickChart(unittest.TestCase):
         # Verify candlestick function was called (download_ohlcv_data)
         mock_download_ohlcv.assert_called_once()
         self.assertIn("candlestick", result.output.lower())
+
+    @patch("grynn_fplot.cli.mpf.plot", wraps=mpf.plot)
+    @patch("grynn_fplot.cli.download_ohlcv_data")
+    @patch("grynn_fplot.cli.plt.show")
+    def test_single_ticker_candles_are_normalized(self, mock_show, mock_download_ohlcv, mock_plot):
+        """The candlestick renderer should receive OHLC values rebased to 100."""
+        mock_df = self._create_ohlcv_df(days=250)
+        mock_download_ohlcv.return_value = mock_df
+
+        result = self.runner.invoke(display_plot, ["AAPL", "--since", "max"])
+
+        self.assertEqual(result.exit_code, 0)
+        plotted_df = mock_plot.call_args.args[0]
+        self.assertEqual(plotted_df["Close"].iloc[0], 100.0)
+        self.assertListEqual(plotted_df["Volume"].tolist(), mock_df["Volume"].tolist())
+        self.assertEqual(mock_plot.call_args.kwargs["ylabel"], "Normalized Price (base = 100)")
 
     @patch("grynn_fplot.cli.download_ticker_data")
     @patch("grynn_fplot.cli.plt.show")

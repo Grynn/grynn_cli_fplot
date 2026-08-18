@@ -177,6 +177,26 @@ def _normalize_frame_to_visible_window(df, visible_mask, start=100):
     return normalized, drawdown
 
 
+def _normalize_ohlcv_to_visible_window(df, view_start_idx, start=100):
+    """Rebase OHLC prices to the first visible close while preserving volume.
+
+    Every price field must use the same base so candle bodies and wicks retain
+    their relative shape. Rows before the visible window are also transformed
+    to keep panning across the prefetched history continuous.
+    """
+    if df.empty:
+        return df.copy()
+
+    base_close = float(df["Close"].iloc[view_start_idx])
+    if not np.isfinite(base_close) or base_close == 0:
+        raise ValueError("Cannot normalize candlestick data without a finite, non-zero close price")
+
+    normalized = df.copy()
+    price_columns = [column for column in ("Open", "High", "Low", "Close") if column in normalized.columns]
+    normalized[price_columns] = normalized[price_columns].div(base_close).mul(start)
+    return normalized
+
+
 def _set_padded_ylim(ax, values, *, zero_top=False) -> None:
     """Set a compact y-axis around finite visible values."""
     finite_values = np.asarray(values, dtype=float)
@@ -685,10 +705,6 @@ def display_candlestick_plot(ticker, since, interval, debug):
         print(f"No data found for {ticker}.")
         return
 
-    # Calculate SMAs on the full dataset
-    sma_50 = df["Close"].rolling(window=50).mean()
-    sma_200 = df["Close"].rolling(window=200).mean()
-
     # Find the integer index position for the initial view start
     view_start_idx = 0
     if requested_since is not None:
@@ -703,8 +719,15 @@ def display_candlestick_plot(ticker, since, interval, debug):
 
     view_count = len(df) - view_start_idx
 
+    # Rebase the first visible close to 100. Use the same factor for every
+    # price field so candlestick geometry remains intact; volume is unchanged.
+    df = _normalize_ohlcv_to_visible_window(df, view_start_idx)
+    sma_50 = df["Close"].rolling(window=50).mean()
+    sma_200 = df["Close"].rolling(window=200).mean()
+
     print(
-        f"Generating candlestick plot for {ticker} since {requested_since.date() if requested_since else 'max'}. Interval: {interval}"
+        f"Generating normalized candlestick plot for {ticker} since "
+        f"{requested_since.date() if requested_since else 'max'}. Interval: {interval}"
     )
     print(f"📊 Loaded {len(df)} data points (up to 10 years cached)")
     if view_start_idx > 0:
@@ -742,8 +765,8 @@ def display_candlestick_plot(ticker, since, interval, debug):
         style=s,
         volume=True,
         addplot=add_plots if add_plots else None,
-        title=f"{ticker} - Candlestick Chart",
-        ylabel="Price",
+        title=f"{ticker} - Normalized Candlestick Chart",
+        ylabel="Normalized Price (base = 100)",
         ylabel_lower="Volume",
         figsize=(16, 10),
         xrotation=15,

@@ -1,6 +1,6 @@
 .PHONY: install clean test lint format coverage dev bump pre-commit pre-commit-install build publish alfred
 
-test:
+test: dev
 	uv run pytest
 
 pre-commit: dev
