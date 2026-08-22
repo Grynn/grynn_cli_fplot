@@ -5,6 +5,11 @@
 
 A command-line tool for plotting comparative stock price history and analyzing options contracts.
 
+> [!NOTE]
+> The Alfred adapter remains canonical in this repository under `alfred/`.
+> A matching snapshot is indexed in the private `Grynn/alfred-scripts`
+> monorepo alongside Vishal's other Alfred workflows.
+
 ## Installation
 
 ### From PyPI
