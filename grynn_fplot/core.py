@@ -1,4 +1,7 @@
+import os
 import re
+import sys
+import tempfile
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from typing import Union, List
@@ -351,6 +354,13 @@ def get_years(df):
     return (end_date - start_date).days / 365.25
 
 
+OPTIONS_CACHE_TTL_SECONDS = 300  # same as the raw price cache
+
+# Yahoo reports 0-6 % for contracts with no live quote; such a volatility pushes delta to 1
+MIN_PLAUSIBLE_IV = 0.05
+MAX_PLAUSIBLE_IV = 5.0
+
+
 def get_cache_dir():
     """Get the cache directory for fplot data"""
     cache_dir = Path.home() / ".cache" / "grynn_fplot"
@@ -440,27 +450,45 @@ def get_cached_options_data(ticker: str):
         with open(cache_file, "r") as f:
             cached_data = json.load(f)
 
-        # Check if cache is less than 1 hour old
+        # Quotes are priced against a live spot, so an old chain gives wrong metrics
         cache_time = datetime.fromisoformat(cached_data["timestamp"])
-        if (datetime.now() - cache_time).total_seconds() < 3600:
+        if (datetime.now() - cache_time).total_seconds() < OPTIONS_CACHE_TTL_SECONDS:
             return cached_data["data"]
-    except (json.JSONDecodeError, KeyError, ValueError):
-        pass
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        pass  # An unreadable or truncated cache file is a miss
 
     return None
 
 
+def _options_json_default(value):
+    """JSON form of what yfinance leaves in an option chain: timestamps and numpy scalars"""
+    if isinstance(value, datetime):  # pd.Timestamp and pd.NaT are both datetime subclasses
+        return None if pd.isna(value) else value.isoformat()
+    if isinstance(value, np.generic):
+        return value.item()
+    raise TypeError(f"{type(value).__name__} is not JSON serializable")
+
+
 def cache_options_data(ticker: str, data: dict):
-    """Cache options data for a ticker"""
+    """Cache options data for a ticker
+
+    Written to a temp file and moved into place, so a failed write leaves no truncated cache behind.
+    A failure is reported on stderr (stdout is piped to fzf) and does not stop the run.
+    """
     cache_file = get_cache_dir() / f"{ticker.upper()}_options.json"
 
     cached_data = {"timestamp": datetime.now().isoformat(), "data": data}
 
+    tmp_name = None
     try:
-        with open(cache_file, "w") as f:
-            json.dump(cached_data, f)
-    except Exception:
-        pass  # Silently fail if caching doesn't work
+        with tempfile.NamedTemporaryFile("w", dir=cache_file.parent, suffix=".tmp", delete=False) as f:
+            tmp_name = f.name
+            json.dump(cached_data, f, default=_options_json_default)
+        os.replace(tmp_name, cache_file)
+    except (OSError, TypeError, ValueError) as exc:
+        print(f"Warning: could not cache options data for {ticker}: {exc}", file=sys.stderr)
+        if tmp_name:
+            Path(tmp_name).unlink(missing_ok=True)
 
 
 def fetch_options_data(ticker: str):
@@ -633,6 +661,67 @@ def calculate_black_scholes_delta(
         return norm.cdf(d1) - 1
 
 
+def calculate_implied_volatility(
+    option_price: float,
+    spot_price: float,
+    strike: float,
+    time_to_expiry: float,
+    option_type: str = "call",
+    risk_free_rate: float = 0.05,
+) -> float | None:
+    """Implied volatility from an option's price, by inverting Black-Scholes
+
+    Returns None when no volatility fits: a price at or below the no-arbitrage floor
+    (S - K e^-rT for a call, K e^-rT - S for a put), as with a stale last trade or a deep
+    in-the-money call on a dividend payer, or a price above what any volatility gives.
+    """
+    from math import erfc, exp, log, sqrt
+    from scipy.optimize import brentq
+
+    if option_price <= 0 or spot_price <= 0 or strike <= 0 or time_to_expiry <= 0:
+        return None
+
+    is_call = option_type.lower() in ["call", "calls"]
+    discounted_strike = strike * exp(-risk_free_rate * time_to_expiry)
+    floor = spot_price - discounted_strike if is_call else discounted_strike - spot_price
+    if option_price <= max(floor, 0.0):
+        return None
+
+    def price_error(volatility: float) -> float:
+        root_t = volatility * sqrt(time_to_expiry)
+        d1 = (log(spot_price / strike) + (risk_free_rate + 0.5 * volatility**2) * time_to_expiry) / root_t
+        d2 = d1 - root_t
+        # Normal CDF via erfc: this runs for every row of a chain and scipy's norm.cdf is much slower
+        n_d1, n_d2 = 0.5 * erfc(-d1 / sqrt(2)), 0.5 * erfc(-d2 / sqrt(2))
+        call_price = spot_price * n_d1 - discounted_strike * n_d2
+        model_price = call_price if is_call else call_price - spot_price + discounted_strike
+        return model_price - option_price
+
+    try:
+        return brentq(price_error, 1e-4, 10.0, xtol=1e-5)
+    except ValueError:
+        return None
+
+
+def resolve_implied_volatility(
+    option_price: float,
+    yahoo_iv: float | None,
+    spot_price: float,
+    strike: float,
+    time_to_expiry: float,
+    option_type: str = "call",
+) -> float | None:
+    """The volatility behind delta and leverage: the one the option's own price implies, so the metrics
+    agree with that price. Yahoo's figure is only a fallback, when it is plausible. None rather than a guess.
+    """
+    implied = calculate_implied_volatility(option_price, spot_price, strike, time_to_expiry, option_type)
+    if implied is not None:
+        return implied
+    if yahoo_iv and MIN_PLAUSIBLE_IV <= yahoo_iv <= MAX_PLAUSIBLE_IV:
+        return yahoo_iv
+    return None
+
+
 def calculate_implied_leverage(
     spot_price: float,
     option_price: float,
@@ -654,9 +743,8 @@ def calculate_implied_leverage(
     This represents the percentage change in option value for a 1% change in stock price.
     For example, if leverage is 10, a 1% move in stock results in ~10% move in option.
 
-    Note: When called from format_options_for_display(), this function requires the actual
-    implied volatility from Yahoo Finance API. If implied volatility is not available,
-    leverage will be None and displayed as "N/A".
+    Note: format_options_for_display() passes the volatility from resolve_implied_volatility().
+    If there is none, leverage is None and displayed as "N/A".
 
     Args:
         spot_price: Current stock price (S)
@@ -665,7 +753,7 @@ def calculate_implied_leverage(
         time_to_expiry: Time to expiry in years (T)
         option_type: 'call' or 'put'
         risk_free_rate: Risk-free interest rate, default 5%
-        volatility: Implied volatility from Yahoo Finance (required for accurate calculation)
+        volatility: Implied volatility (required for accurate calculation)
 
     Returns:
         Implied leverage (Omega) as a multiplier
@@ -876,9 +964,11 @@ def format_options_for_display(
                 try:
                     from datetime import datetime, timezone
 
-                    # lastTradeDate can be a timestamp or datetime
+                    # lastTradeDate can be a timestamp, a datetime, or an ISO string from the cache
                     if isinstance(last_trade_date, (int, float)):
                         last_trade_dt = datetime.fromtimestamp(last_trade_date)
+                    elif isinstance(last_trade_date, str):
+                        last_trade_dt = datetime.fromisoformat(last_trade_date)
                     else:
                         last_trade_dt = last_trade_date
                     # Convert both to timezone-aware UTC for comparison
@@ -925,19 +1015,20 @@ def format_options_for_display(
                 else None
             )
 
-            # Calculate implied leverage using implied volatility from Yahoo Finance
-            # Only calculate if implied volatility is available (no default fallback)
+            # Calculate implied leverage using the volatility the option's own price implies
+            # Only calculate if a volatility is available (no default fallback)
+            implied_vol = None
             leverage = None
             if price > 0 and strike > 0 and dte > 0:
                 time_to_expiry_years = dte / 365.0
-                # Get implied volatility from Yahoo Finance data
-                implied_vol = option.get("impliedVolatility", None)
-                if implied_vol and implied_vol > 0:
-                    # Use actual market implied volatility
+                implied_vol = resolve_implied_volatility(
+                    price, option.get("impliedVolatility", None), spot_price, strike, time_to_expiry_years, option_type
+                )
+                if implied_vol:
                     leverage = calculate_implied_leverage(
                         spot_price, price, strike, time_to_expiry_years, option_type, volatility=implied_vol
                     )
-                # If no implied volatility available, leverage remains None (will display as N/A)
+                # If no volatility is available, leverage remains None (will display as N/A)
 
             # Calculate strike percentage (% above/below spot)
             strike_pct = None
@@ -951,7 +1042,6 @@ def format_options_for_display(
                 raw_efficiency = leverage / return_metric
 
             # Store option data for first pass
-            implied_vol = option.get("impliedVolatility", None)
             raw_options.append(
                 {
                     "ticker": ticker,
