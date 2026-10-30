@@ -294,7 +294,7 @@ All tests passing: ✅
 
 1. **Parsing**: Filter expressions are parsed once at CLI invocation
 2. **Evaluation**: O(n) complexity where n is number of options
-3. **Caching**: Options data is cached for 1 hour (unchanged)
+3. **Caching**: Options data is cached for 5 minutes
 4. **Minimal overhead**: Filter evaluation adds negligible overhead compared to API calls
 
 ## Backwards Compatibility

@@ -136,8 +136,8 @@ Expiry               Strike        Breakeven    Vol     IV   LT  AR: ask / mid /
 
 **Leverage & Efficiency (calls only):**
 - Leverage: Implied leverage (Ω = Δ × S/O) where Δ is Black-Scholes delta, S is spot price, O is the option price (bid/ask midpoint by default)
-  - Delta calculated using actual implied volatility from Yahoo Finance
-  - Shows "N/A" if implied volatility is not available
+  - Delta uses the volatility implied by the option's own price (Yahoo's figure is only a fallback, and ignored when implausible: it reads 0-6 % when there is no live quote)
+  - Shows "N/A" if no volatility is available, e.g. a stale last trade below intrinsic value
   - Shows the percentage change in option value for a 1% change in stock price
   - Example: 10x leverage means a 1% stock move results in ~10% option move
 - Efficiency: Percentile rank (0-100) of leverage/CAGR ratio
@@ -234,7 +234,7 @@ fplot --put --default-filter none
 - Cache stored in `~/.cache/grynn_fplot/`
 - Short TTL ensures data stays fresh (splits, dividends are constantly updated)
 
-**Options Data Caching**: Options data is cached for 1 hour to improve performance and reduce API calls.
+**Options Data Caching**: Options data is cached for 5 minutes, because cached quotes are priced against a live spot.
 
 ## Alfred Workflow
 
