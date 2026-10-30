@@ -113,14 +113,21 @@ AAPL 230C 35DTE ($3.10, 25.2%, 32.3x, eff:78)
 ```
 Format: `TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile)`
 
+**Option price basis:** `price`, CAGR, leverage and efficiency use the bid/ask midpoint by default,
+because last trades on LEAPs can be days old. If only one side is quoted, the executable side is used
+(ask for calls, bid for puts); if there is no quote, the last trade is used. Midpoint rows keep the
+format above. Any other row ends with its basis inside the parens, e.g. `AAPL 225C 35DTE ($5.25, 18.5%, 19.0x, eff:45, last)`
+(`ask`, `bid` or `last`), so a stale price is visible. Yahoo returns zero bid/ask outside US market hours,
+so off-hours output is mostly `last`.
+
 **Puts** display a table with spot price, expiry, strike, breakeven, volume, IV, and AR with premiums:
 ```
 spot = $235.50
 
-Expiry               Strike        Breakeven    Vol     IV   LT  AR: ask / bid / last
--------------------------------------------------------------------------------------
-27/Mar/25 (35d)         220   $217.85 (-7.5%)    150   32%   1d  ask: $3.50 (28%) | bid: $2.80 (20%) | last: $3.10 (25%)
-27/Mar/25 (35d)         215   $213.60 (-9.3%)     85   30%   3d  ask: $2.20 (18%) | bid: $1.60 (12%) | last: $1.90 (15%)
+Expiry               Strike        Breakeven    Vol     IV   LT  AR: ask / mid / bid / last
+-------------------------------------------------------------------------------------------------
+27/Mar/25 (35d)         220   $217.85 (-7.5%)    150   32%   1d  ask: $3.50 (28%) | mid: $3.15 (24%) | bid: $2.80 (20%) | last: $3.10 (25%)
+27/Mar/25 (35d)         215   $213.60 (-9.3%)     85   30%   3d  ask: $2.20 (18%) | mid: $1.90 (15%) | bid: $1.60 (12%) | last: $1.90 (15%)
 ```
 
 **Return metrics:**
@@ -128,7 +135,7 @@ Expiry               Strike        Breakeven    Vol     IV   LT  AR: ask / bid /
 - Puts: AR = premium / capital-at-risk, annualized (capital-at-risk = strike - premium)
 
 **Leverage & Efficiency (calls only):**
-- Leverage: Implied leverage (Ω = Δ × S/O) where Δ is Black-Scholes delta, S is spot price, O is option price
+- Leverage: Implied leverage (Ω = Δ × S/O) where Δ is Black-Scholes delta, S is spot price, O is the option price (bid/ask midpoint by default)
   - Delta calculated using actual implied volatility from Yahoo Finance
   - Shows "N/A" if implied volatility is not available
   - Shows the percentage change in option value for a 1% change in stock price
@@ -161,7 +168,7 @@ The `--filter` option supports complex filter expressions with logical operators
 - **Filter Fields:**
   - `dte`: Days to expiry
   - `volume`: Option volume
-  - `price`: Last price
+  - `price`: Option price used for all metrics: bid/ask midpoint (default), else the quoted executable side (ask for calls, bid for puts), else the last trade
   - `return`, `ret`, `ar`: Return metric (CAGR for calls, AR for puts) - all aliases work
   - `strike_pct`, `sp`: Strike percentage above/below spot (positive = above spot, negative = below spot)
   - `lt_days`: Days since last trade (useful for filtering stale options)

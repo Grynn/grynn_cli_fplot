@@ -283,8 +283,15 @@ def display_plot(
     in a format suitable for filtering with tools like fzf.
 
     Output format:
-    - Calls: TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile)
-    - Puts: table with expiry, strike, breakeven, lt_days, AR (bid/ask/last)
+    - Calls: TICKER STRIKE_C DTE (price, CAGR, leverage, eff:percentile[, basis])
+    - Puts: table with expiry, strike, breakeven, lt_days, AR (ask/mid/bid/last)
+
+    Option price defaults to the bid/ask midpoint (last trades on LEAPs can be
+    days old). If only one side is quoted, the executable side is used (ask for
+    calls, bid for puts); with no quote the last trade is used. Calls rows priced
+    from anything other than the midpoint end with the basis (ask, bid or last)
+    inside the parens, e.g. "(... , eff:72, last)". Yahoo returns zero bid/ask
+    outside US market hours, so off-hours output is mostly "last".
 
     Return metrics:
     - Calls: CAGR to breakeven
