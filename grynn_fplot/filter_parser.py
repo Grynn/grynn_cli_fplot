@@ -30,7 +30,11 @@ from dataclasses import dataclass
 FILTER_FIELDS = {
     "dte": {"description": "Days to expiry", "type": "integer", "example": "dte>150"},
     "volume": {"description": "Option trading volume", "type": "integer", "example": "volume>100"},
-    "price": {"description": "Last traded price", "type": "float", "example": "price<5.0"},
+    "price": {
+        "description": "Option price: bid/ask midpoint, else the quoted executable side, else last trade",
+        "type": "float",
+        "example": "price<5.0",
+    },
     "return": {
         "description": "Return metric (CAGR for calls, annualized return for puts)",
         "type": "float",

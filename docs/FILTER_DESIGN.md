@@ -51,7 +51,7 @@ Added two new CLI options:
 The following fields are available for filtering:
 - `dte`: Days to expiry (integer)
 - `volume`: Option volume (integer)
-- `price`: Last price (float)
+- `price`: Option price (float): bid/ask midpoint, else the quoted executable side (ask for calls, bid for puts), else the last trade
 - `return`, `ret`, `ar`: Return metric - CAGR for calls, annualized return for puts (float)
   - All three aliases reference the same value
 - `strike_pct`, `sp`: Strike percentage above/below current spot price (float)

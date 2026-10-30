@@ -781,6 +781,31 @@ def evaluate_filter(filter_ast: dict, data: dict) -> bool:
     return False
 
 
+def select_option_price(option_type: str, bid: float, ask: float, last: float):
+    """Pick the price used for return, leverage and efficiency calculations.
+
+    Last trades on long-dated options can be days old, so prefer a live quote:
+    1. mid = (bid + ask) / 2 when BOTH sides are quoted (> 0). A zero side means
+       no quote and is never averaged in.
+    2. the executable side when it alone is quoted: ask for calls, bid for puts.
+    3. lastPrice when > 0.
+    4. otherwise no price.
+
+    Returns:
+        (price, basis) where basis is 'mid', 'ask', 'bid' or 'last';
+        (0.0, None) when no price is available.
+    """
+    if bid > 0 and ask > 0:
+        return (bid + ask) / 2, "mid"
+    if option_type == "calls" and ask > 0:
+        return ask, "ask"
+    if option_type == "puts" and bid > 0:
+        return bid, "bid"
+    if last > 0:
+        return last, "last"
+    return 0.0, None
+
+
 def format_options_for_display(
     ticker: str,
     option_type: str = "calls",
@@ -791,6 +816,10 @@ def format_options_for_display(
     filter_ast: dict = None,
 ):
     """Format options data for fzf-friendly display with enhanced information
+
+    Option prices default to the bid/ask midpoint (see select_option_price), falling
+    back to the executable side and then the last trade, so stale last trades do not
+    distort CAGR, leverage and efficiency.
 
     Args:
         ticker: Stock ticker symbol
@@ -836,6 +865,10 @@ def format_options_for_display(
             bid_price = option.get("bid", 0) or 0
             ask_price = option.get("ask", 0) or 0
 
+            # Price used for all metrics: mid by default, else ask/bid, else last trade
+            price, price_basis = select_option_price(option_type, bid_price, ask_price, last_price)
+            mid_price = (bid_price + ask_price) / 2 if bid_price > 0 and ask_price > 0 else None
+
             # Get last trade date and calculate days since last trade
             last_trade_date = option.get("lastTradeDate", None)
             lt_days = None
@@ -858,11 +891,11 @@ def format_options_for_display(
                     lt_days = None
 
             # Calculate return metric based on option type
-            if option_type == "calls" and last_price > 0:
-                return_metric = calculate_cagr_to_breakeven(spot_price, strike, last_price, dte)
+            if option_type == "calls" and price > 0:
+                return_metric = calculate_cagr_to_breakeven(spot_price, strike, price, dte)
                 return_str = f"{return_metric:.2%}"
-            elif option_type == "puts" and last_price > 0:
-                return_metric = calculate_put_annualized_return(strike, last_price, dte)
+            elif option_type == "puts" and price > 0:
+                return_metric = calculate_put_annualized_return(strike, price, dte)
                 return_str = f"{return_metric:.2%}"
             else:
                 # No valid price for calculation - display N/A and set metric to None
@@ -870,7 +903,17 @@ def format_options_for_display(
                 return_str = "N/A"
                 return_metric = None
 
-            # Calculate AR for bid/ask (puts only)
+            # Calculate AR for mid/bid/ask/last (puts only)
+            ar_mid = (
+                calculate_put_annualized_return(strike, mid_price, dte)
+                if option_type == "puts" and mid_price is not None
+                else None
+            )
+            ar_last = (
+                calculate_put_annualized_return(strike, last_price, dte)
+                if option_type == "puts" and last_price > 0
+                else None
+            )
             ar_bid = (
                 calculate_put_annualized_return(strike, bid_price, dte)
                 if option_type == "puts" and bid_price > 0
@@ -885,14 +928,14 @@ def format_options_for_display(
             # Calculate implied leverage using implied volatility from Yahoo Finance
             # Only calculate if implied volatility is available (no default fallback)
             leverage = None
-            if last_price > 0 and strike > 0 and dte > 0:
+            if price > 0 and strike > 0 and dte > 0:
                 time_to_expiry_years = dte / 365.0
                 # Get implied volatility from Yahoo Finance data
                 implied_vol = option.get("impliedVolatility", None)
                 if implied_vol and implied_vol > 0:
                     # Use actual market implied volatility
                     leverage = calculate_implied_leverage(
-                        spot_price, last_price, strike, time_to_expiry_years, option_type, volatility=implied_vol
+                        spot_price, price, strike, time_to_expiry_years, option_type, volatility=implied_vol
                     )
                 # If no implied volatility available, leverage remains None (will display as N/A)
 
@@ -916,11 +959,16 @@ def format_options_for_display(
                     "dte": dte,
                     "expiry_date": expiry_date,
                     "volume": volume,
-                    "price": last_price,
+                    "price": price,
+                    "price_basis": price_basis,
+                    "last": last_price,
+                    "mid": mid_price,
                     "bid": bid_price,
                     "ask": ask_price,
                     "ar_bid": ar_bid,
                     "ar_ask": ar_ask,
+                    "ar_mid": ar_mid,
+                    "ar_last": ar_last,
                     "iv": implied_vol,
                     "return_metric": return_metric,
                     "return_str": return_str,
@@ -971,9 +1019,11 @@ def format_options_for_display(
         if opt["option_type"] == "calls":
             leverage_str = f"{opt['leverage']:.1f}x" if opt["leverage"] and opt["leverage"] > 0 else "N/A"
             efficiency_str = f"{efficiency:.0f}" if efficiency is not None else "N/A"
+            # Mid rows keep the original format; any other basis is appended as the last element
+            basis_suffix = f", {opt['price_basis']}" if opt["price_basis"] not in (None, "mid") else ""
             formatted_option = (
                 f"{opt['ticker'].upper()} {opt['strike']:.0f}{option_type_letter} {opt['dte']}DTE "
-                f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str})"
+                f"(${opt['price']:.2f}, {opt['return_str']}, {leverage_str}, eff:{efficiency_str}{basis_suffix})"
             )
         else:
             formatted_option = None  # puts use table format
@@ -985,15 +1035,20 @@ def format_options_for_display(
                 "dte": opt["dte"],
                 "volume": opt["volume"],
                 "price": opt["price"],
+                "price_basis": opt["price_basis"],
+                "last": opt.get("last", 0),
                 "return_metric": opt["return_metric"],
                 "leverage": opt["leverage"],
                 "efficiency": efficiency,
                 # put-specific fields
                 "expiry_date": opt.get("expiry_date"),
+                "mid": opt.get("mid"),
                 "bid": opt.get("bid", 0),
                 "ask": opt.get("ask", 0),
+                "ar_mid": opt.get("ar_mid"),
                 "ar_bid": opt.get("ar_bid"),
                 "ar_ask": opt.get("ar_ask"),
+                "ar_last": opt.get("ar_last"),
                 "lt_days": opt.get("lt_days"),
                 "iv": opt.get("iv"),
             }
@@ -1027,7 +1082,9 @@ def format_options_for_display(
     lines = [f"spot = ${spot_price:.2f}", ""]
 
     # Table header
-    header = f"{'Expiry':<20} {'Strike':>7} {'Breakeven':>16} {'Vol':>6} {'IV':>6} {'LT':>4}  {'AR: ask / bid / last'}"
+    header = (
+        f"{'Expiry':<20} {'Strike':>7} {'Breakeven':>16} {'Vol':>6} {'IV':>6} {'LT':>4}  {'AR: ask / mid / bid / last'}"
+    )
     lines.append(header)
     lines.append("-" * len(header))
 
@@ -1043,16 +1100,17 @@ def format_options_for_display(
         iv_str = f"{opt['iv']:.0%}" if opt.get("iv") else "-"
         lt_str = f"{opt['lt_days']}d" if opt["lt_days"] is not None else "-"
 
-        # AR with premium values: ask: $X.XX (YY%) | bid: $X.XX (YY%) | last: $X.XX (YY%)
+        # AR with premium values: ask: $X.XX (YY%) | mid: ... | bid: ... | last: ... (real last trade)
         def _ar_cell(price, ar):
             if price and price > 0 and ar:
                 return f"${price:.2f} ({ar:.0%})"
             return "-"
 
         ar_ask = _ar_cell(opt["ask"], opt["ar_ask"])
+        ar_mid = _ar_cell(opt["mid"], opt["ar_mid"])
         ar_bid = _ar_cell(opt["bid"], opt["ar_bid"])
-        ar_last = _ar_cell(opt["price"], opt["return_metric"])
-        ar_str = f"ask: {ar_ask} | bid: {ar_bid} | last: {ar_last}"
+        ar_last = _ar_cell(opt["last"], opt["ar_last"])
+        ar_str = f"ask: {ar_ask} | mid: {ar_mid} | bid: {ar_bid} | last: {ar_last}"
 
         row = f"{expiry_fmt:<20} {opt['strike']:>7.0f} {be_str:>16} {vol_str:>6} {iv_str:>6} {lt_str:>4}  {ar_str}"
         lines.append(row)
